@@ -229,77 +229,369 @@ const TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {
-                email: {
-                    type: 'string',
-                    description: 'Contact email address',
-                },
-                name: {
+                additional_data: {
                     type: 'object',
-                    description: 'Contact name',
+                    description: 'Additional contact data',
                     properties: {
-                        first_name: {
+                        birth_city: {
                             type: 'string',
-                            description: 'First name',
+                            description: 'Birth city',
                         },
-                        last_name: {
+                        birth_date: {
                             type: 'string',
-                            description: 'Last name',
+                            description: 'Birth date (YYYY-MM-DD format)',
+                        },
+                        social_security_number: {
+                            type: 'string',
+                            description: 'Social security number',
                         },
                     },
-                    required: ['first_name', 'last_name'],
-                },
-                phone: {
-                    type: 'object',
-                    description: 'Contact phone',
-                    properties: {
-                        country_code: {
-                            type: 'string',
-                            description: 'Country code',
-                        },
-                        area_code: {
-                            type: 'string',
-                            description: 'Area code',
-                        },
-                        subscriber_number: {
-                            type: 'string',
-                            description: 'Subscriber number',
-                        },
-                    },
-                    required: ['country_code', 'subscriber_number'],
                 },
                 address: {
                     type: 'object',
                     description: 'Contact address',
                     properties: {
-                        street: {
-                            type: 'string',
-                            description: 'Street',
-                        },
-                        number: {
-                            type: 'string',
-                            description: 'House number',
-                        },
                         city: {
                             type: 'string',
                             description: 'City',
-                        },
-                        zipcode: {
-                            type: 'string',
-                            description: 'Zip code',
                         },
                         country: {
                             type: 'string',
                             description: 'Country code (2 letters)',
                         },
+                        number: {
+                            type: 'string',
+                            description: 'House number',
+                        },
+                        state: {
+                            type: 'string',
+                            description: 'State or province',
+                        },
+                        street: {
+                            type: 'string',
+                            description: 'Street name',
+                        },
+                        suffix: {
+                            type: 'string',
+                            description: 'Address suffix',
+                        },
+                        zipcode: {
+                            type: 'string',
+                            description: 'Postal/ZIP code',
+                        },
                     },
-                    required: ['street', 'city', 'zipcode', 'country'],
+                    required: ['city', 'country', 'number', 'street', 'zipcode'],
+                },
+                api_access_enabled: {
+                    type: 'boolean',
+                    description: 'Enable API access for this contact',
+                    default: false,
+                },
+                comments: {
+                    type: 'string',
+                    description: 'Comments about the contact',
                 },
                 company_name: {
                     type: 'string',
                     description: 'Company name',
                 },
+                email: {
+                    type: 'string',
+                    description: 'Contact email address',
+                },
+                inn: {
+                    type: 'string',
+                    description: 'INN (Individual Taxpayer Number)',
+                },
+                is_active: {
+                    type: 'boolean',
+                    description: 'Whether the contact is active',
+                    default: false,
+                },
+                kpp: {
+                    type: 'string',
+                    description: 'KPP (Tax Registration Reason Code)',
+                },
+                locale: {
+                    type: 'string',
+                    description: 'Contact locale',
+                },
+                name: {
+                    type: 'object',
+                    description: 'Contact name information',
+                    properties: {
+                        first_name: {
+                            type: 'string',
+                            description: 'First name',
+                        },
+                        full_name: {
+                            type: 'string',
+                            description: 'Full name',
+                        },
+                        initials: {
+                            type: 'string',
+                            description: 'Initials',
+                        },
+                        last_name: {
+                            type: 'string',
+                            description: 'Last name',
+                        },
+                        prefix: {
+                            type: 'string',
+                            description: 'Name prefix (Mr, Mrs, etc.)',
+                        },
+                    },
+                    required: ['first_name', 'last_name'],
+                },
+                password: {
+                    type: 'string',
+                    description: 'Contact password',
+                },
+                phone: {
+                    type: 'object',
+                    description: 'Contact phone information',
+                    properties: {
+                        area_code: {
+                            type: 'string',
+                            description: 'Area code',
+                        },
+                        country_code: {
+                            type: 'string',
+                            description: 'Country code (e.g., +31)',
+                        },
+                        subscriber_number: {
+                            type: 'string',
+                            description: 'Phone number',
+                        },
+                    },
+                    required: ['country_code', 'subscriber_number'],
+                },
+                role: {
+                    type: 'string',
+                    description: 'Contact role (admin, tech, billing, owner)',
+                    enum: ['admin', 'tech', 'billing', 'owner'],
+                },
+                type: {
+                    type: 'string',
+                    description: 'Contact type',
+                },
+                gender: {
+                    type: 'string',
+                    description: 'Gender (M/F)',
+                    enum: ['M', 'F'],
+                },
+                username: {
+                    type: 'string',
+                    description: 'Username for the contact',
+                },
+                vat: {
+                    type: 'string',
+                    description: 'VAT number',
+                },
             },
-            required: ['email', 'name', 'phone', 'address'],
+            required: ['name', 'phone', 'address'],
+        },
+    },
+    {
+        name: 'update_contact',
+        description: 'Update an existing contact',
+        method: 'PUT',
+        path: '/contacts/{id}',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: {
+                    type: 'number',
+                    description: 'Contact ID to update',
+                },
+                additional_data: {
+                    type: 'object',
+                    description: 'Additional contact data',
+                    properties: {
+                        birth_city: {
+                            type: 'string',
+                            description: 'Birth city',
+                        },
+                        birth_date: {
+                            type: 'string',
+                            description: 'Birth date (YYYY-MM-DD format)',
+                        },
+                        social_security_number: {
+                            type: 'string',
+                            description: 'Social security number',
+                        },
+                    },
+                },
+                address: {
+                    type: 'object',
+                    description: 'Contact address',
+                    properties: {
+                        city: {
+                            type: 'string',
+                            description: 'City',
+                        },
+                        country: {
+                            type: 'string',
+                            description: 'Country code (2 letters)',
+                        },
+                        number: {
+                            type: 'string',
+                            description: 'House number',
+                        },
+                        state: {
+                            type: 'string',
+                            description: 'State or province',
+                        },
+                        street: {
+                            type: 'string',
+                            description: 'Street name',
+                        },
+                        suffix: {
+                            type: 'string',
+                            description: 'Address suffix',
+                        },
+                        zipcode: {
+                            type: 'string',
+                            description: 'Postal/ZIP code',
+                        },
+                    },
+                },
+                api_access_enabled: {
+                    type: 'boolean',
+                    description: 'Enable API access for this contact',
+                },
+                comments: {
+                    type: 'string',
+                    description: 'Comments about the contact',
+                },
+                company_name: {
+                    type: 'string',
+                    description: 'Company name',
+                },
+                email: {
+                    type: 'string',
+                    description: 'Contact email address',
+                },
+                inn: {
+                    type: 'string',
+                    description: 'INN (Individual Taxpayer Number)',
+                },
+                is_active: {
+                    type: 'boolean',
+                    description: 'Whether the contact is active',
+                },
+                kpp: {
+                    type: 'string',
+                    description: 'KPP (Tax Registration Reason Code)',
+                },
+                locale: {
+                    type: 'string',
+                    description: 'Contact locale',
+                },
+                name: {
+                    type: 'object',
+                    description: 'Contact name information',
+                    properties: {
+                        first_name: {
+                            type: 'string',
+                            description: 'First name',
+                        },
+                        full_name: {
+                            type: 'string',
+                            description: 'Full name',
+                        },
+                        initials: {
+                            type: 'string',
+                            description: 'Initials',
+                        },
+                        last_name: {
+                            type: 'string',
+                            description: 'Last name',
+                        },
+                        prefix: {
+                            type: 'string',
+                            description: 'Name prefix (Mr, Mrs, etc.)',
+                        },
+                    },
+                },
+                password: {
+                    type: 'string',
+                    description: 'Contact password',
+                },
+                phone: {
+                    type: 'object',
+                    description: 'Contact phone information',
+                    properties: {
+                        area_code: {
+                            type: 'string',
+                            description: 'Area code',
+                        },
+                        country_code: {
+                            type: 'string',
+                            description: 'Country code (e.g., +31)',
+                        },
+                        subscriber_number: {
+                            type: 'string',
+                            description: 'Phone number',
+                        },
+                    },
+                },
+                role: {
+                    type: 'string',
+                    description: 'Contact role (admin, tech, billing, owner)',
+                    enum: ['admin', 'tech', 'billing', 'owner'],
+                },
+                type: {
+                    type: 'string',
+                    description: 'Contact type',
+                },
+                gender: {
+                    type: 'string',
+                    description: 'Gender (M/F)',
+                    enum: ['M', 'F'],
+                },
+                username: {
+                    type: 'string',
+                    description: 'Username for the contact',
+                },
+                vat: {
+                    type: 'string',
+                    description: 'VAT number',
+                },
+            },
+            required: ['id'],
+        },
+    },
+    {
+        name: 'get_contact',
+        description: 'Get contact details by ID',
+        method: 'GET',
+        path: '/contacts/{id}',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: {
+                    type: 'number',
+                    description: 'Contact ID',
+                },
+            },
+            required: ['id'],
+        },
+    },
+    {
+        name: 'delete_contact',
+        description: 'Delete a contact by ID',
+        method: 'DELETE',
+        path: '/contacts/{id}',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: {
+                    type: 'number',
+                    description: 'Contact ID to delete',
+                },
+            },
+            required: ['id'],
         },
     },
 ];
@@ -400,8 +692,16 @@ class MCPServer {
                     // Try to login using environment variables
                     await this.handleLogin(TOOLS[0], {});
                 }
+                // Special handling for create_contact and update_contact to ensure all required fields are present
+                let processedParams = params || {};
+                if (toolName === 'create_contact') {
+                    processedParams = this.processContactData(params || {});
+                }
+                else if (toolName === 'update_contact') {
+                    processedParams = this.processUpdateContactData(params || {});
+                }
                 // Execute the API call
-                const result = await this.executeApiCall(toolDetails, params || {});
+                const result = await this.executeApiCall(toolDetails, processedParams);
                 // Return the result in the correct MCP format
                 return {
                     content: [
@@ -418,6 +718,129 @@ class MCPServer {
                 throw error;
             }
         });
+    }
+    /**
+     * Process contact data to ensure all required fields are present
+     */
+    processContactData(params) {
+        // Generate a unique username if not provided
+        const username = params.username || `contact_${Date.now()}`;
+        // Ensure all required fields have at least empty values
+        const processedData = {
+            // Required fields with defaults
+            username: username,
+            name: {
+                first_name: params.name?.first_name || '',
+                last_name: params.name?.last_name || '',
+                full_name: params.name?.full_name || `${params.name?.first_name || ''} ${params.name?.last_name || ''}`.trim(),
+                initials: params.name?.initials || '',
+                prefix: params.name?.prefix || ''
+            },
+            email: params.email || '',
+            phone: {
+                country_code: params.phone?.country_code || '',
+                area_code: params.phone?.area_code || '',
+                subscriber_number: params.phone?.subscriber_number || ''
+            },
+            address: {
+                street: params.address?.street || '',
+                number: params.address?.number || '',
+                suffix: params.address?.suffix || '',
+                city: params.address?.city || '',
+                state: params.address?.state || '',
+                zipcode: params.address?.zipcode || '',
+                country: params.address?.country || ''
+            },
+            // Optional fields with defaults
+            additional_data: params.additional_data || {},
+            api_access_enabled: params.api_access_enabled || false,
+            comments: params.comments || '',
+            company_name: params.company_name || '',
+            inn: params.inn || '',
+            is_active: params.is_active !== undefined ? params.is_active : true,
+            kpp: params.kpp || '',
+            locale: params.locale || '',
+            password: params.password || '',
+            role: params.role || 'tech',
+            vat: params.vat || '',
+            // Include type and gender if provided
+            ...(params.type && { type: params.type }),
+            ...(params.gender && { gender: params.gender })
+        };
+        // Handle phone number formatting for India and other countries
+        if (params.phone?.country_code && params.phone?.subscriber_number) {
+            const fullNumber = params.phone.subscriber_number.replace(/\D/g, '');
+            // For Indian numbers, split area code from subscriber number
+            if (params.phone.country_code === '+91' && fullNumber.length >= 10) {
+                processedData.phone.area_code = fullNumber.substring(0, 3);
+                processedData.phone.subscriber_number = fullNumber.substring(3);
+            }
+        }
+        return processedData;
+    }
+    /**
+     * Process update contact data to ensure proper formatting
+     */
+    processUpdateContactData(params) {
+        // ID is required for update
+        if (!params.id) {
+            throw new Error('Contact ID is required for update');
+        }
+        const processedData = {
+            id: params.id
+        };
+        // Only include fields that are provided in the update request
+        if (params.name) {
+            processedData.name = {
+                first_name: params.name.first_name || '',
+                last_name: params.name.last_name || '',
+                full_name: params.name.full_name || `${params.name.first_name || ''} ${params.name.last_name || ''}`.trim(),
+                initials: params.name.initials || '',
+                prefix: params.name.prefix || ''
+            };
+        }
+        if (params.email !== undefined) {
+            processedData.email = params.email;
+        }
+        if (params.phone) {
+            processedData.phone = {
+                country_code: params.phone.country_code || '',
+                area_code: params.phone.area_code || '',
+                subscriber_number: params.phone.subscriber_number || ''
+            };
+            // Handle phone number formatting for India and other countries
+            if (params.phone.country_code && params.phone.subscriber_number) {
+                const fullNumber = params.phone.subscriber_number.replace(/\D/g, '');
+                // For Indian numbers, split area code from subscriber number
+                if (params.phone.country_code === '+91' && fullNumber.length >= 10) {
+                    processedData.phone.area_code = fullNumber.substring(0, 3);
+                    processedData.phone.subscriber_number = fullNumber.substring(3);
+                }
+            }
+        }
+        if (params.address) {
+            processedData.address = {
+                street: params.address.street || '',
+                number: params.address.number || '',
+                suffix: params.address.suffix || '',
+                city: params.address.city || '',
+                state: params.address.state || '',
+                zipcode: params.address.zipcode || '',
+                country: params.address.country || ''
+            };
+        }
+        // Include other fields if provided
+        const optionalFields = [
+            'additional_data', 'api_access_enabled', 'comments', 'company_name',
+            'inn', 'is_active', 'kpp', 'locale', 'password', 'role', 'vat',
+            'type', 'gender', 'username'
+        ];
+        optionalFields.forEach(field => {
+            if (params[field] !== undefined) {
+                processedData[field] = params[field];
+            }
+        });
+        return processedData;
     }
     /**
      * Handle login specifically
