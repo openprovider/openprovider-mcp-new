@@ -7,7 +7,7 @@ const MASTER = Buffer.from('0123456789abcdef0123456789abcdef0123456789abcdef0123
 
 export function createFakeKms(): Kms {
   return {
-    async generateDataKey() {
+    generateDataKey() {
       const plaintext = randomBytes(32);
       const iv = randomBytes(12);
       const cipher = createCipheriv('aes-256-gcm', MASTER, iv);
@@ -15,15 +15,15 @@ export function createFakeKms(): Kms {
       const tag = cipher.getAuthTag();
       // Wire format: iv (12) || tag (16) || enc (32)
       const ciphertext = Buffer.concat([iv, tag, enc]);
-      return { plaintext, ciphertext };
+      return Promise.resolve({ plaintext, ciphertext });
     },
-    async decrypt(_arn, ciphertext) {
+    decrypt(_arn, ciphertext) {
       const iv = ciphertext.subarray(0, 12);
       const tag = ciphertext.subarray(12, 28);
       const enc = ciphertext.subarray(28);
       const decipher = createDecipheriv('aes-256-gcm', MASTER, iv);
       decipher.setAuthTag(tag);
-      return Buffer.concat([decipher.update(enc), decipher.final()]);
+      return Promise.resolve(Buffer.concat([decipher.update(enc), decipher.final()]));
     },
   };
 }

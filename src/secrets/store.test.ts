@@ -31,15 +31,16 @@ function createInMemoryRepo() {
   const keys = new Map<string, { wrappedDek: Buffer; kmsKeyArn: string }>();
   const secrets = new Map<string, { ciphertext: Buffer; nonce: Buffer; authTag: Buffer; version: number }>();
   return {
-    async getTenantKey(t: string) { return keys.get(t) ?? null; },
-    async setTenantKey(t: string, v: { wrappedDek: Buffer; kmsKeyArn: string }) { keys.set(t, v); },
-    async getSecret(t: string, n: string) { return secrets.get(`${t}:${n}`) ?? null; },
-    async upsertSecret(
+    getTenantKey(t: string) { return Promise.resolve(keys.get(t) ?? null); },
+    setTenantKey(t: string, v: { wrappedDek: Buffer; kmsKeyArn: string }) { keys.set(t, v); return Promise.resolve(); },
+    getSecret(t: string, n: string) { return Promise.resolve(secrets.get(`${t}:${n}`) ?? null); },
+    upsertSecret(
       t: string,
       n: string,
       v: { ciphertext: Buffer; nonce: Buffer; authTag: Buffer; version: number },
     ) {
       secrets.set(`${t}:${n}`, v);
+      return Promise.resolve();
     },
   };
 }
