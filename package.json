@@ -1,37 +1,49 @@
 {
   "name": "openprovider-mcp",
-  "version": "0.1.0",
-  "description": "MCP server for Openprovider API integration",
+  "version": "0.2.0-phase1.0",
+  "private": true,
+  "description": "Enterprise multi-tenant MCP server for Openprovider",
   "type": "module",
-  "main": "server.js",
-  "bin": {
-    "openprovider-mcp": "./server.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git@github.com:hichamdotpage/openprovider-mcp.git"
-  },
-  "homepage": "https://github.com/hichamdotpage/openprovider-mcp",
-  "bugs": {
-    "url": "https://github.com/hichamdotpage/openprovider-mcp/issues"
-  },
+  "engines": { "node": ">=20.11" },
   "scripts": {
-    "build": "tsc && node -e \"import('fs').then(fs => fs.chmodSync('server.js', '755'))\"",
-    "start": "node server.js",
-    "example:check": "node examples/domain-check.js",
-    "example:register": "node examples/domain-register.js",
-    "test": "node test/test-server.js"
+    "build": "tsc -p tsconfig.json",
+    "start": "node --enable-source-maps dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.600.0",
     "@modelcontextprotocol/sdk": "^1.17.2",
-    "axios": "^1.6.2",
-    "dotenv": "^16.4.7",
-    "minimist": "^1.2.8"
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.52.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.55.0",
+    "@opentelemetry/sdk-node": "^0.55.0",
+    "drizzle-orm": "^0.36.0",
+    "fastify": "^4.28.1",
+    "pg": "^8.13.0",
+    "pino": "^9.5.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/minimist": "^1.2.5",
-    "@types/node": "^20.10.0",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.3.2"
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.10",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "drizzle-kit": "^0.28.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "testcontainers": "^10.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^1.6.0"
   }
 }
