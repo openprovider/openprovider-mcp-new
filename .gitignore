@@ -26,3 +26,7 @@ Thumbs.db
 dist/
 coverage/
 *.log
+
+# Local-only credential / collection material — never commit
+PostMan/
+.omc/state/
