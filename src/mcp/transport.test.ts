@@ -42,7 +42,8 @@ describe('mcp transport', () => {
       headers: { 'content-type': 'application/json', authorization: 'Bearer dev' },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { result: { tools: { name: string }[] } };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body: { result: { tools: { name: string }[] } } = res.json();
     expect(body.result.tools.map((t) => t.name)).toContain('phase1.echo');
   });
 
@@ -59,7 +60,8 @@ describe('mcp transport', () => {
       headers: { 'content-type': 'application/json', authorization: 'Bearer dev' },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { result: { content: { type: string; text: string }[] } };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body: { result: { content: { type: string; text: string }[] } } = res.json();
     expect(body.result.content[0]?.text).toContain('hi');
   });
 
@@ -71,7 +73,8 @@ describe('mcp transport', () => {
       headers: { 'content-type': 'application/json', authorization: 'Bearer dev' },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { error: { code: number } };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body: { error: { code: number } } = res.json();
     expect(body.error.code).toBe(-32601);
   });
 });
