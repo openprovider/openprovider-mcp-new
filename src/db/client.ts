@@ -20,5 +20,7 @@ export function createDb(config: DbConfig): { db: Db; pool: pg.Pool } {
 }
 
 export async function setTenantContext(client: pg.PoolClient, tenantId: string): Promise<void> {
-  await client.query('SET LOCAL app.current_tenant = $1', [tenantId]);
+  // SET LOCAL does not accept query parameters; set_config(..., true) is the
+  // parameter-safe equivalent for transaction-local GUCs.
+  await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant', tenantId]);
 }

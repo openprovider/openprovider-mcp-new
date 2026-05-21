@@ -17,7 +17,8 @@ export async function runAsTenant<T>(
   try {
     await client.query('BEGIN');
     await client.query('SET LOCAL ROLE app_role');
-    await client.query(`SET LOCAL app.current_tenant = '${tenantId}'`);
+    // SET LOCAL does not accept query parameters; set_config(..., true) does.
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant', tenantId]);
     const result = await fn(client);
     await client.query('COMMIT');
     return result;
