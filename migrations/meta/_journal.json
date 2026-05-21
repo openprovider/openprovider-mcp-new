@@ -2,6 +2,7 @@
   "version": "5",
   "dialect": "pg",
   "entries": [
-    { "idx": 0, "version": "5", "when": 1747800000000, "tag": "0001_create_roles_and_tenants", "breakpoints": true }
+    { "idx": 0, "version": "5", "when": 1747800000000, "tag": "0001_create_roles_and_tenants", "breakpoints": true },
+    { "idx": 1, "version": "5", "when": 1747800001000, "tag": "0002_create_users", "breakpoints": true }
   ]
 }
