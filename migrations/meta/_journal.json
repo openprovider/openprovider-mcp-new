@@ -1,0 +1,7 @@
+{
+  "version": "5",
+  "dialect": "pg",
+  "entries": [
+    { "idx": 0, "version": "5", "when": 1747800000000, "tag": "0001_create_roles_and_tenants", "breakpoints": true }
+  ]
+}
