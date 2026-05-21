@@ -21,3 +21,8 @@ yarn-error.log
 # OS files
 .DS_Store
 Thumbs.db
+
+# Dist and coverage
+dist/
+coverage/
+*.log
