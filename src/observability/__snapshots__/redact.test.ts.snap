@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`redactSensitive > redaction list snapshot matches spec 1`] = `
+[
+  "api_key",
+  "authorization",
+  "ciphertext",
+  "client_secret",
+  "contact.inn",
+  "contact.password",
+  "contact.social_security_number",
+  "cookie",
+  "data.token",
+  "password",
+  "plaintext",
+  "refresh_token",
+  "wrapped_dek",
+]
+`;
