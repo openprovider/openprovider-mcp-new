@@ -7,7 +7,14 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/index.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/index.ts',
+        // Infrastructure files covered by integration tests, not unit tests:
+        'src/db/**',
+        'src/secrets/aws-kms.ts',
+        'src/secrets/db-repo.ts',
+      ],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },
   },
