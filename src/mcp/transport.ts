@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -39,6 +40,17 @@ export interface McpServerConfig {
 
 export async function createMcpServer(config: McpServerConfig): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+
+  await app.register(rateLimit, {
+    global: false,
+    max: 60,
+    timeWindow: '1 minute',
+    keyGenerator: (req) => {
+      const auth = req.headers.authorization;
+      return auth ? auth.slice(0, 128) : `anon:${req.ip}`;
+    },
+  });
+
   const resolve = createIdentityResolver({
     devToken: config.devToken,
     devPrincipal: config.devPrincipal,
@@ -77,128 +89,136 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
   // Per-session SDK transport tracking (process-local; Phase 6+ may move to Redis)
   const sessions = new Map<string, { server: Server; transport: StreamableHTTPServerTransport }>();
 
-  app.post('/mcp', async (req, reply) => {
-    const principal = await resolve(req.headers.authorization);
-    if (!principal) {
-      void reply.code(401).send({ error: 'unauthenticated' });
-      return;
-    }
-
-    // ---------------------------------------------------------------------------
-    // Fast-path: intercept tools/call before the SDK transport when a
-    // dispatchFactory is configured. This keeps the per-request pg connection
-    // scope entirely outside the SDK transport while the SDK still handles
-    // initialize / tools/list / SSE plumbing.
-    // ---------------------------------------------------------------------------
-    if (config.dispatchFactory) {
-      const body = req.body as
-        | { method?: string; id?: unknown; params?: { name?: string; arguments?: unknown } }
-        | undefined;
-      if (body && body.method === 'tools/call') {
-        const toolName = body.params?.name ?? '';
-        const toolArgs = body.params?.arguments ?? {};
-        const { dispatch, cleanup } = await config.dispatchFactory(principal);
-        try {
-          const result = await withRequestContext(
-            {
-              tenantId: principal.tenantId,
-              principalSubject: principal.subject,
-              principalKind: principal.kind,
-            },
-            () => dispatch({ name: toolName, args: toolArgs, principal }),
-          );
-          void reply.send({
-            jsonrpc: '2.0',
-            id: body.id ?? null,
-            result: { content: [{ type: 'text', text: JSON.stringify(result) }] },
-          });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          const code = (err as { code?: string }).code ?? 'internal_error';
-          void reply.send({
-            jsonrpc: '2.0',
-            id: body.id ?? null,
-            error: { code: -32603, message: msg, data: { code } },
-          });
-        } finally {
-          await cleanup();
-        }
+  app.post(
+    '/mcp',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const principal = await resolve(req.headers.authorization);
+      if (!principal) {
+        void reply.code(401).send({ error: 'unauthenticated' });
         return;
       }
-    }
 
-    const existingSessionId = req.headers['mcp-session-id'] as string | undefined;
+      // ---------------------------------------------------------------------------
+      // Fast-path: intercept tools/call before the SDK transport when a
+      // dispatchFactory is configured. This keeps the per-request pg connection
+      // scope entirely outside the SDK transport while the SDK still handles
+      // initialize / tools/list / SSE plumbing.
+      // ---------------------------------------------------------------------------
+      if (config.dispatchFactory) {
+        const body = req.body as
+          | { method?: string; id?: unknown; params?: { name?: string; arguments?: unknown } }
+          | undefined;
+        if (body && body.method === 'tools/call') {
+          const toolName = body.params?.name ?? '';
+          const toolArgs = body.params?.arguments ?? {};
+          const { dispatch, cleanup } = await config.dispatchFactory(principal);
+          try {
+            const result = await withRequestContext(
+              {
+                tenantId: principal.tenantId,
+                principalSubject: principal.subject,
+                principalKind: principal.kind,
+              },
+              () => dispatch({ name: toolName, args: toolArgs, principal }),
+            );
+            void reply.send({
+              jsonrpc: '2.0',
+              id: body.id ?? null,
+              result: { content: [{ type: 'text', text: JSON.stringify(result) }] },
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const code = (err as { code?: string }).code ?? 'internal_error';
+            void reply.send({
+              jsonrpc: '2.0',
+              id: body.id ?? null,
+              error: { code: -32603, message: msg, data: { code } },
+            });
+          } finally {
+            await cleanup();
+          }
+          return;
+        }
+      }
 
-    let entry: { server: Server; transport: StreamableHTTPServerTransport } | undefined;
+      const existingSessionId = req.headers['mcp-session-id'] as string | undefined;
 
-    if (existingSessionId) {
-      // Subsequent request — look up the existing session
-      entry = sessions.get(existingSessionId);
+      let entry: { server: Server; transport: StreamableHTTPServerTransport } | undefined;
+
+      if (existingSessionId) {
+        // Subsequent request — look up the existing session
+        entry = sessions.get(existingSessionId);
+        if (!entry) {
+          void reply.code(404).send({ error: 'session not found' });
+          return;
+        }
+      } else {
+        // No session ID: must be an initialize request
+        const body = req.body as { method?: string } | Array<{ method?: string }> | undefined;
+        const isInit = Array.isArray(body)
+          ? body.some((m) => isInitializeRequest(m))
+          : isInitializeRequest(body as Record<string, unknown>);
+
+        if (!isInit) {
+          void reply
+            .code(400)
+            .send({ error: 'Mcp-Session-Id header required for non-initialize requests' });
+          return;
+        }
+
+        // Create a new session — the transport generates its own ID via sessionIdGenerator
+        const newSessionId = randomUUID();
+        const server = createMcpSdkServer(config.tools);
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => newSessionId,
+          onsessioninitialized: (sid) => {
+            sessions.set(sid, { server, transport });
+          },
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+        await server.connect(transport as any);
+        entry = { server, transport };
+      }
+
+      // Hijack the reply so Fastify doesn't try to serialize after handleRequest
+      // writes directly to reply.raw (Node ServerResponse).
+      void reply.hijack();
+      const resolvedEntry = entry;
+      await withRequestContext(
+        {
+          tenantId: principal.tenantId,
+          principalSubject: principal.subject,
+          principalKind: principal.kind,
+        },
+        () => resolvedEntry.transport.handleRequest(req.raw, reply.raw, req.body),
+      );
+    },
+  );
+
+  app.get(
+    '/mcp',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const principal = await resolve(req.headers.authorization);
+      if (!principal) {
+        void reply.code(401).send({ error: 'unauthenticated' });
+        return;
+      }
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId) {
+        void reply.code(400).send({ error: 'mcp-session-id required for SSE' });
+        return;
+      }
+      const entry = sessions.get(sessionId);
       if (!entry) {
         void reply.code(404).send({ error: 'session not found' });
         return;
       }
-    } else {
-      // No session ID: must be an initialize request
-      const body = req.body as { method?: string } | Array<{ method?: string }> | undefined;
-      const isInit = Array.isArray(body)
-        ? body.some((m) => isInitializeRequest(m))
-        : isInitializeRequest(body as Record<string, unknown>);
-
-      if (!isInit) {
-        void reply
-          .code(400)
-          .send({ error: 'Mcp-Session-Id header required for non-initialize requests' });
-        return;
-      }
-
-      // Create a new session — the transport generates its own ID via sessionIdGenerator
-      const newSessionId = randomUUID();
-      const server = createMcpSdkServer(config.tools);
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => newSessionId,
-        onsessioninitialized: (sid) => {
-          sessions.set(sid, { server, transport });
-        },
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-      await server.connect(transport as any);
-      entry = { server, transport };
-    }
-
-    // Hijack the reply so Fastify doesn't try to serialize after handleRequest
-    // writes directly to reply.raw (Node ServerResponse).
-    void reply.hijack();
-    const resolvedEntry = entry;
-    await withRequestContext(
-      {
-        tenantId: principal.tenantId,
-        principalSubject: principal.subject,
-        principalKind: principal.kind,
-      },
-      () => resolvedEntry.transport.handleRequest(req.raw, reply.raw, req.body),
-    );
-  });
-
-  app.get('/mcp', async (req, reply) => {
-    const principal = await resolve(req.headers.authorization);
-    if (!principal) {
-      void reply.code(401).send({ error: 'unauthenticated' });
-      return;
-    }
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    if (!sessionId) {
-      void reply.code(400).send({ error: 'mcp-session-id required for SSE' });
-      return;
-    }
-    const entry = sessions.get(sessionId);
-    if (!entry) {
-      void reply.code(404).send({ error: 'session not found' });
-      return;
-    }
-    void reply.hijack();
-    await entry.transport.handleRequest(req.raw, reply.raw);
-  });
+      void reply.hijack();
+      await entry.transport.handleRequest(req.raw, reply.raw);
+    },
+  );
 
   return app;
 }
