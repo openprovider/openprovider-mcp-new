@@ -5,6 +5,7 @@ import { startOtel } from './observability/otel.js';
 import { createLogger } from './observability/logger.js';
 import { createDb } from './db/client.js';
 import { createAwsKms } from './secrets/aws-kms.js';
+import { createWorkOsVerifier } from './auth/oauth/workos.js';
 import type { Principal } from './auth/principal.js';
 
 async function main(): Promise<void> {
@@ -21,6 +22,12 @@ async function main(): Promise<void> {
     ...(cfg.awsEndpoint ? { endpoint: cfg.awsEndpoint } : {}),
   });
 
+  const verifier = createWorkOsVerifier({
+    clientId: cfg.workosClientId,
+    issuer: cfg.workosIssuer,
+    jwksUri: cfg.workosJwksUri,
+  });
+
   const devPrincipal: Principal = {
     kind: 'user',
     tenantId: '00000000-0000-0000-0000-000000000001',
@@ -33,6 +40,12 @@ async function main(): Promise<void> {
   const app = await createMcpServer({
     devToken: cfg.devBearerToken,
     devPrincipal,
+    verifier,
+    oauth: {
+      authorizationServer: cfg.workosAuthkitDomain,
+      resource: `http://localhost:${cfg.port}`,
+      scopesSupported: ['mcp:read', 'mcp:write'],
+    },
     readinessChecks: [
       {
         name: 'db',
