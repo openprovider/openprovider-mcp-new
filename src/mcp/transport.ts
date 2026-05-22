@@ -9,6 +9,11 @@ export interface McpServerConfig {
   devToken: string;
   devPrincipal: Principal;
   readinessChecks?: { name: string; check: () => Promise<boolean> }[];
+  oauth?: {
+    authorizationServer: string;
+    resource: string;
+    scopesSupported: string[];
+  };
 }
 
 type JsonRpcRequest = {
@@ -44,6 +49,18 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     void reply.code(ready ? 200 : 503);
     return { ready, checks: results };
   });
+
+  if (config.oauth) {
+    const oauth = config.oauth;
+    app.get('/.well-known/oauth-protected-resource', () =>
+      Promise.resolve({
+        resource: oauth.resource,
+        authorization_servers: [oauth.authorizationServer],
+        scopes_supported: oauth.scopesSupported,
+        bearer_methods_supported: ['header'],
+      }),
+    );
+  }
 
   app.post('/mcp', async (req, reply): Promise<JsonRpcResponse> => {
     const principal = await resolve(req.headers.authorization);
@@ -88,7 +105,11 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
               result: { content: [{ type: 'text', text: JSON.stringify(result) }] },
             };
           }
-          return { jsonrpc: '2.0', id: rpc.id, error: { code: -32601, message: 'method not found' } };
+          return {
+            jsonrpc: '2.0',
+            id: rpc.id,
+            error: { code: -32601, message: 'method not found' },
+          };
         } catch (err) {
           return {
             jsonrpc: '2.0',
