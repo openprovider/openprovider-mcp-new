@@ -17,6 +17,7 @@ export default defineConfig({
         'src/server.ts',
         'src/openprovider/types.ts',
         'src/openprovider/errors.ts',
+        'src/openprovider/token-cache-pg.ts',
       ],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },

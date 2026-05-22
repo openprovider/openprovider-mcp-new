@@ -1,5 +1,13 @@
-import { customType, pgTable, text, timestamp, uuid, integer, bigserial, jsonb } from 'drizzle-orm/pg-core';
-
+import {
+  customType,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  integer,
+  bigserial,
+  jsonb,
+} from 'drizzle-orm/pg-core';
 
 export const tenants = pgTable('tenants', {
   id: uuid('id').primaryKey(),
@@ -13,11 +21,15 @@ export type Tenant = typeof tenants.$inferSelect;
 export type NewTenant = typeof tenants.$inferInsert;
 
 const bytea = customType<{ data: Buffer }>({
-  dataType() { return 'bytea'; },
+  dataType() {
+    return 'bytea';
+  },
 });
 
 export const tenantKeys = pgTable('tenant_keys', {
-  tenantId: uuid('tenant_id').primaryKey().references(() => tenants.id),
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id),
   wrappedDek: bytea('wrapped_dek').notNull(),
   kmsKeyArn: text('kms_key_arn').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -26,7 +38,9 @@ export const tenantKeys = pgTable('tenant_keys', {
 
 export const tenantSecrets = pgTable('tenant_secrets', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   name: text('name').notNull(),
   ciphertext: bytea('ciphertext').notNull(),
   nonce: bytea('nonce').notNull(),
@@ -36,10 +50,26 @@ export const tenantSecrets = pgTable('tenant_secrets', {
   rotatedAt: timestamp('rotated_at', { withTimezone: true }),
 });
 
+export const openproviderAccounts = pgTable('openprovider_accounts', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id),
+  username: text('username').notNull(),
+  resellerId: text('reseller_id'),
+  cachedToken: bytea('cached_token'),
+  cachedTokenNonce: bytea('cached_token_nonce'),
+  cachedTokenTag: bytea('cached_token_tag'),
+  tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
+  status: text('status').notNull().default('connected'),
+  lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const auditEvents = pgTable('audit_events', {
   id: bigserial('id', { mode: 'bigint' }).primaryKey(),
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   actorKind: text('actor_kind').notNull(),
   actorSubject: text('actor_subject').notNull(),
   eventType: text('event_type').notNull(),

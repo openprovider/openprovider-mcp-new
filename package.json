@@ -43,7 +43,9 @@
   },
   "lint-staged": {
     "!(*.config).{ts,js}": [
-      "prettier --write",
+      "prettier --write"
+    ],
+    "src/**/*.{ts,js}": [
       "eslint --max-warnings=0"
     ],
     "*.config.{ts,js}": [

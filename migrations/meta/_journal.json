@@ -6,6 +6,7 @@
     { "idx": 1, "version": "5", "when": 1747800001000, "tag": "0002_create_users", "breakpoints": true },
     { "idx": 2, "version": "5", "when": 1747800002000, "tag": "0003_create_tenant_keys", "breakpoints": true },
     { "idx": 3, "version": "5", "when": 1747800003000, "tag": "0004_create_tenant_secrets", "breakpoints": true },
-    { "idx": 4, "version": "5", "when": 1747800004000, "tag": "0005_create_audit_events_placeholder", "breakpoints": true }
+    { "idx": 4, "version": "5", "when": 1747800004000, "tag": "0005_create_audit_events_placeholder", "breakpoints": true },
+    { "idx": 5, "version": "5", "when": 1748000000000, "tag": "0006_create_openprovider_accounts", "breakpoints": true }
   ]
 }
