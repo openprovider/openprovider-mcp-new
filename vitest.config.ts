@@ -15,6 +15,8 @@ export default defineConfig({
         'src/secrets/aws-kms.ts',
         'src/secrets/db-repo.ts',
         'src/server.ts',
+        'src/openprovider/types.ts',
+        'src/openprovider/errors.ts',
       ],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },

@@ -42,9 +42,12 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "lint-staged": {
-    "*.{ts,js}": [
+    "!(*.config).{ts,js}": [
       "prettier --write",
       "eslint --max-warnings=0"
+    ],
+    "*.config.{ts,js}": [
+      "prettier --write"
     ]
   },
   "devDependencies": {
