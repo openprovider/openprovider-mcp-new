@@ -9,6 +9,13 @@ import type { AccessTokenVerifier } from '../auth/oauth/workos.js';
 import { withRequestContext } from '../observability/request-context.js';
 import { randomUUID } from 'node:crypto';
 
+export interface DispatchFactory {
+  (principal: Principal): Promise<{
+    dispatch: (input: { name: string; args: unknown; principal: Principal }) => Promise<unknown>;
+    cleanup: () => Promise<void>;
+  }>;
+}
+
 export interface McpServerConfig {
   devToken: string;
   devPrincipal: Principal;
@@ -20,6 +27,14 @@ export interface McpServerConfig {
   };
   tools?: ToolEntry[];
   verifier?: AccessTokenVerifier;
+  /**
+   * Factory invoked per `tools/call` request. Receives the principal and returns a fully-wired
+   * dispatch function plus a cleanup callback. Phase 2 uses this to acquire a pg connection,
+   * set tenant role + GUC, and bind the audit sink + token manager + tool deps to that connection.
+   * When present, `tools/call` requests are intercepted before the SDK transport and handled
+   * directly; all other MCP methods (initialize, tools/list, SSE) continue through the SDK.
+   */
+  dispatchFactory?: DispatchFactory;
 }
 
 export async function createMcpServer(config: McpServerConfig): Promise<FastifyInstance> {
@@ -67,6 +82,49 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     if (!principal) {
       void reply.code(401).send({ error: 'unauthenticated' });
       return;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Fast-path: intercept tools/call before the SDK transport when a
+    // dispatchFactory is configured. This keeps the per-request pg connection
+    // scope entirely outside the SDK transport while the SDK still handles
+    // initialize / tools/list / SSE plumbing.
+    // ---------------------------------------------------------------------------
+    if (config.dispatchFactory) {
+      const body = req.body as
+        | { method?: string; id?: unknown; params?: { name?: string; arguments?: unknown } }
+        | undefined;
+      if (body && body.method === 'tools/call') {
+        const toolName = body.params?.name ?? '';
+        const toolArgs = body.params?.arguments ?? {};
+        const { dispatch, cleanup } = await config.dispatchFactory(principal);
+        try {
+          const result = await withRequestContext(
+            {
+              tenantId: principal.tenantId,
+              principalSubject: principal.subject,
+              principalKind: principal.kind,
+            },
+            () => dispatch({ name: toolName, args: toolArgs, principal }),
+          );
+          void reply.send({
+            jsonrpc: '2.0',
+            id: body.id ?? null,
+            result: { content: [{ type: 'text', text: JSON.stringify(result) }] },
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const code = (err as { code?: string }).code ?? 'internal_error';
+          void reply.send({
+            jsonrpc: '2.0',
+            id: body.id ?? null,
+            error: { code: -32603, message: msg, data: { code } },
+          });
+        } finally {
+          await cleanup();
+        }
+        return;
+      }
     }
 
     const existingSessionId = req.headers['mcp-session-id'] as string | undefined;

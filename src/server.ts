@@ -7,6 +7,14 @@ import { createDb } from './db/client.js';
 import { createAwsKms } from './secrets/aws-kms.js';
 import { createWorkOsVerifier } from './auth/oauth/workos.js';
 import type { Principal } from './auth/principal.js';
+import { createDispatcher } from './mcp/dispatch.js';
+import { createPgAuditSink } from './audit/pg-sink.js';
+import { createCheckDomainTool } from './tools/check-domain.js';
+import { createOpenproviderClient } from './openprovider/client.js';
+import { createOpenproviderTokenManager } from './openprovider/token-manager.js';
+import { createPgTokenCache } from './openprovider/token-cache-pg.js';
+import { createSecretsStore } from './secrets/store.js';
+import { createDbSecretsRepo } from './secrets/db-repo.js';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -37,6 +45,96 @@ async function main(): Promise<void> {
     role: 'owner',
   };
 
+  // Shared Openprovider HTTP client (stateless — safe to share across requests).
+  const openproviderClient = createOpenproviderClient();
+
+  /**
+   * Per-request factory. Acquires one pg pool client, sets tenant role + GUC,
+   * and constructs the dispatcher with all deps bound to that connection.
+   * The connection is committed/released in cleanup().
+   */
+  async function dispatchFactory(principal: Principal) {
+    const client = await pool.connect();
+    let inTx = false;
+    try {
+      await client.query('BEGIN');
+      inTx = true;
+      await client.query('SET LOCAL ROLE app_role');
+      await client.query('SELECT set_config($1, $2, true)', [
+        'app.current_tenant',
+        principal.tenantId,
+      ]);
+
+      // Resolve per-tenant Openprovider credentials lazily from the secrets store.
+      const fetchCredentials = async (
+        tenantId: string,
+      ): Promise<{ username: string; password: string }> => {
+        const u = await client.query<{ username: string }>(
+          'SELECT username FROM openprovider_accounts WHERE tenant_id = $1',
+          [tenantId],
+        );
+        const username = u.rows[0]?.username;
+        if (!username) throw new Error(`no openprovider account for tenant ${tenantId}`);
+        const store = createSecretsStore({
+          kms,
+          kmsKeyArn: cfg.kmsKeyArn,
+          repo: createDbSecretsRepo(client),
+        });
+        const passwordBuf = await store.get(tenantId, 'openprovider.password');
+        if (!passwordBuf) throw new Error(`no openprovider password for tenant ${tenantId}`);
+        return { username, password: passwordBuf.toString('utf8') };
+      };
+
+      const tokenManager = createOpenproviderTokenManager({
+        fetchCredentials,
+        cache: createPgTokenCache({
+          client,
+          getDek: async (tenantId: string) => {
+            // Read the wrapped DEK directly from tenant_keys and decrypt via KMS.
+            const r = await client.query<{ wrapped_dek: Buffer; kms_key_arn: string }>(
+              'SELECT wrapped_dek, kms_key_arn FROM tenant_keys WHERE tenant_id = $1',
+              [tenantId],
+            );
+            if (!r.rows[0]) throw new Error(`no tenant_keys row for ${tenantId}`);
+            return kms.decrypt(r.rows[0].kms_key_arn, r.rows[0].wrapped_dek);
+          },
+        }),
+      });
+
+      const tools = [createCheckDomainTool({ client: openproviderClient, tokenManager })];
+
+      const dispatch = createDispatcher({
+        tools,
+        audit: createPgAuditSink(client),
+      });
+
+      return {
+        dispatch,
+        cleanup: async () => {
+          try {
+            if (inTx) await client.query('COMMIT');
+          } catch {
+            try {
+              await client.query('ROLLBACK');
+            } catch {
+              /* ignore */
+            }
+          } finally {
+            client.release();
+          }
+        },
+      };
+    } catch (err) {
+      try {
+        if (inTx) await client.query('ROLLBACK');
+      } catch {
+        /* ignore */
+      }
+      client.release();
+      throw err;
+    }
+  }
+
   const app = await createMcpServer({
     devToken: cfg.devBearerToken,
     devPrincipal,
@@ -46,6 +144,7 @@ async function main(): Promise<void> {
       resource: `http://localhost:${cfg.port}`,
       scopesSupported: ['mcp:read', 'mcp:write'],
     },
+    dispatchFactory,
     readinessChecks: [
       {
         name: 'db',
