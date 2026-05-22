@@ -10,6 +10,11 @@ const schema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
   DEV_BEARER_TOKEN: z.string().min(1),
   PORT: z.coerce.number().default(3000),
+  WORKOS_CLIENT_ID: z.string().min(1),
+  WORKOS_API_KEY: z.string().min(1),
+  WORKOS_AUTHKIT_DOMAIN: z.string().url(),
+  WORKOS_JWKS_URI: z.string().url(),
+  WORKOS_ISSUER: z.string().url().default('https://api.workos.com'),
 });
 
 export function loadConfig(
@@ -26,6 +31,11 @@ export function loadConfig(
     otlpEndpoint: parsed.OTEL_EXPORTER_OTLP_ENDPOINT,
     devBearerToken: parsed.DEV_BEARER_TOKEN,
     port: parsed.PORT,
+    workosClientId: parsed.WORKOS_CLIENT_ID,
+    workosApiKey: parsed.WORKOS_API_KEY,
+    workosAuthkitDomain: parsed.WORKOS_AUTHKIT_DOMAIN,
+    workosJwksUri: parsed.WORKOS_JWKS_URI,
+    workosIssuer: parsed.WORKOS_ISSUER,
   };
 }
 
