@@ -1,9 +1,13 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import { zodToJsonSchema } from 'zod-to-json-schema';
-import { placeholderTool } from './placeholder-tool.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { createMcpSdkServer, type ToolEntry } from './sdk-transport.js';
 import { createIdentityResolver } from '../auth/identity.js';
 import type { Principal } from '../auth/principal.js';
+import type { AccessTokenVerifier } from '../auth/oauth/workos.js';
 import { withRequestContext } from '../observability/request-context.js';
+import { randomUUID } from 'node:crypto';
 
 export interface McpServerConfig {
   devToken: string;
@@ -14,24 +18,17 @@ export interface McpServerConfig {
     resource: string;
     scopesSupported: string[];
   };
+  tools?: ToolEntry[];
+  verifier?: AccessTokenVerifier;
 }
-
-type JsonRpcRequest = {
-  jsonrpc: '2.0';
-  id: number | string | null;
-  method: string;
-  params?: unknown;
-};
-
-type JsonRpcResponse =
-  | { jsonrpc: '2.0'; id: number | string | null; result: unknown }
-  | { jsonrpc: '2.0'; id: number | string | null; error: { code: number; message: string } };
-
-const TOOLS = [placeholderTool];
 
 export async function createMcpServer(config: McpServerConfig): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  const resolve = createIdentityResolver(config);
+  const resolve = createIdentityResolver({
+    devToken: config.devToken,
+    devPrincipal: config.devPrincipal,
+    ...(config.verifier !== undefined ? { verifier: config.verifier } : {}),
+  });
 
   app.get('/healthz', () => Promise.resolve({ ok: true }));
 
@@ -62,63 +59,87 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     );
   }
 
-  app.post('/mcp', async (req, reply): Promise<JsonRpcResponse> => {
+  // Per-session SDK transport tracking (process-local; Phase 6+ may move to Redis)
+  const sessions = new Map<string, { server: Server; transport: StreamableHTTPServerTransport }>();
+
+  app.post('/mcp', async (req, reply) => {
     const principal = await resolve(req.headers.authorization);
     if (!principal) {
-      void reply.code(401);
-      return { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'unauthenticated' } };
+      void reply.code(401).send({ error: 'unauthenticated' });
+      return;
     }
-    const rpc = req.body as JsonRpcRequest;
-    return withRequestContext(
+
+    const existingSessionId = req.headers['mcp-session-id'] as string | undefined;
+
+    let entry: { server: Server; transport: StreamableHTTPServerTransport } | undefined;
+
+    if (existingSessionId) {
+      // Subsequent request — look up the existing session
+      entry = sessions.get(existingSessionId);
+      if (!entry) {
+        void reply.code(404).send({ error: 'session not found' });
+        return;
+      }
+    } else {
+      // No session ID: must be an initialize request
+      const body = req.body as { method?: string } | Array<{ method?: string }> | undefined;
+      const isInit = Array.isArray(body)
+        ? body.some((m) => isInitializeRequest(m))
+        : isInitializeRequest(body as Record<string, unknown>);
+
+      if (!isInit) {
+        void reply
+          .code(400)
+          .send({ error: 'Mcp-Session-Id header required for non-initialize requests' });
+        return;
+      }
+
+      // Create a new session — the transport generates its own ID via sessionIdGenerator
+      const newSessionId = randomUUID();
+      const server = createMcpSdkServer(config.tools);
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => newSessionId,
+        onsessioninitialized: (sid) => {
+          sessions.set(sid, { server, transport });
+        },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+      await server.connect(transport as any);
+      entry = { server, transport };
+    }
+
+    // Hijack the reply so Fastify doesn't try to serialize after handleRequest
+    // writes directly to reply.raw (Node ServerResponse).
+    void reply.hijack();
+    const resolvedEntry = entry;
+    await withRequestContext(
       {
         tenantId: principal.tenantId,
         principalSubject: principal.subject,
         principalKind: principal.kind,
       },
-      async (): Promise<JsonRpcResponse> => {
-        try {
-          if (rpc.method === 'tools/list') {
-            const result = {
-              tools: TOOLS.map((t) => ({
-                name: t.name,
-                description: t.description,
-                inputSchema: zodToJsonSchema(t.inputSchema) as Record<string, unknown>,
-              })),
-            };
-            return { jsonrpc: '2.0', id: rpc.id, result };
-          }
-          if (rpc.method === 'tools/call') {
-            const params = rpc.params as { name: string; arguments?: unknown } | undefined;
-            const tool = TOOLS.find((t) => t.name === params?.name);
-            if (!tool) {
-              return {
-                jsonrpc: '2.0',
-                id: rpc.id,
-                error: { code: -32602, message: `Tool not found: ${params?.name ?? '<missing>'}` },
-              };
-            }
-            const parsed = tool.inputSchema.parse(params?.arguments ?? {});
-            const result = await tool.handler(parsed);
-            return {
-              jsonrpc: '2.0',
-              id: rpc.id,
-              result: { content: [{ type: 'text', text: JSON.stringify(result) }] },
-            };
-          }
-          return {
-            jsonrpc: '2.0',
-            id: rpc.id,
-            error: { code: -32601, message: 'method not found' },
-          };
-        } catch (err) {
-          return {
-            jsonrpc: '2.0',
-            id: rpc.id,
-            error: { code: -32603, message: err instanceof Error ? err.message : 'internal error' },
-          };
-        }
-      },
+      () => resolvedEntry.transport.handleRequest(req.raw, reply.raw, req.body),
     );
+  });
+
+  app.get('/mcp', async (req, reply) => {
+    const principal = await resolve(req.headers.authorization);
+    if (!principal) {
+      void reply.code(401).send({ error: 'unauthenticated' });
+      return;
+    }
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    if (!sessionId) {
+      void reply.code(400).send({ error: 'mcp-session-id required for SSE' });
+      return;
+    }
+    const entry = sessions.get(sessionId);
+    if (!entry) {
+      void reply.code(404).send({ error: 'session not found' });
+      return;
+    }
+    void reply.hijack();
+    await entry.transport.handleRequest(req.raw, reply.raw);
   });
 
   return app;
