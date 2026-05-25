@@ -12,5 +12,6 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     'no-console': ['error', { allow: ['error', 'warn'] }],
   },
-  ignorePatterns: ['dist/', 'node_modules/', 'coverage/', '*.config.ts', 'scripts/', 'tests/', 'examples/'],
+  // frontend/ is a separate Vite sub-project with its own tsconfig; it lints itself.
+  ignorePatterns: ['dist/', 'node_modules/', 'coverage/', '*.config.ts', 'scripts/', 'tests/', 'examples/', 'frontend/'],
 };

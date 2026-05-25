@@ -5,8 +5,8 @@ const baseWorkosEnv = {
   WORKOS_CLIENT_ID: 'client_test',
   WORKOS_API_KEY: 'sk_test_x',
   WORKOS_AUTHKIT_DOMAIN: 'https://test.authkit.app',
-  WORKOS_JWKS_URI: 'https://api.workos.com/sso/jwks/client_test',
-  WORKOS_ISSUER: 'https://api.workos.com',
+  WORKOS_JWKS_URI: 'https://test.authkit.app/oauth2/jwks',
+  WORKOS_ISSUER: 'https://test.authkit.app',
 };
 
 describe('config', () => {
@@ -48,8 +48,23 @@ describe('config', () => {
         DEV_BEARER_TOKEN: 'dev',
         WORKOS_API_KEY: 'sk_test_x',
         WORKOS_AUTHKIT_DOMAIN: 'https://test.authkit.app',
-        WORKOS_JWKS_URI: 'https://api.workos.com/sso/jwks/client_test',
+        WORKOS_JWKS_URI: 'https://test.authkit.app/oauth2/jwks',
+        WORKOS_ISSUER: 'https://test.authkit.app',
       }),
     ).toThrow(/WORKOS_CLIENT_ID/);
+  });
+
+  it('throws if WORKOS_ISSUER is missing (no default)', () => {
+    expect(() =>
+      loadConfig({
+        DATABASE_URL: 'postgres://x',
+        AWS_KMS_KEY_ARN: 'alias/x',
+        DEV_BEARER_TOKEN: 'dev',
+        WORKOS_CLIENT_ID: 'client_test',
+        WORKOS_API_KEY: 'sk_test_x',
+        WORKOS_AUTHKIT_DOMAIN: 'https://test.authkit.app',
+        WORKOS_JWKS_URI: 'https://test.authkit.app/oauth2/jwks',
+      }),
+    ).toThrow(/WORKOS_ISSUER/);
   });
 });

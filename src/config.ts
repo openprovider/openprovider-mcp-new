@@ -14,7 +14,9 @@ const schema = z.object({
   WORKOS_API_KEY: z.string().min(1),
   WORKOS_AUTHKIT_DOMAIN: z.string().url(),
   WORKOS_JWKS_URI: z.string().url(),
-  WORKOS_ISSUER: z.string().url().default('https://api.workos.com'),
+  // No default: for an MCP server the issuer is the AuthKit domain, which is
+  // environment-specific. A default would silently mismatch real tokens.
+  WORKOS_ISSUER: z.string().url(),
 });
 
 export function loadConfig(
