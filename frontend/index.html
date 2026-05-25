@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenProvider MCP - Dashboard</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>OpenProvider MCP</h1>
+        <div id="auth-section">
+          <span id="loading-state">Loading...</span>
+        </div>
+      </header>
+      <main id="main-content">
+        <div id="signed-out-view" class="hidden">
+          <h2>Welcome</h2>
+          <p>Sign in to manage your domains via MCP.</p>
+          <button id="sign-in-btn" class="btn btn-primary">Sign In</button>
+        </div>
+        <div id="signed-in-view" class="hidden">
+          <h2>Dashboard</h2>
+          <div id="user-info"></div>
+          <button id="sign-out-btn" class="btn btn-secondary">Sign Out</button>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
