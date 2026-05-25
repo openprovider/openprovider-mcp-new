@@ -124,25 +124,44 @@ The first TDD task should be the RLS-cross-tenant integration test against a rea
 
 ## Phase 3 — Openprovider token manager + remaining read tools
 
-**Outcome:** A tenant onboards their Openprovider credentials (via a CLI for now — dashboard lands in Phase 6) and all read tools work against the live Openprovider sandbox.
+**Outcome:** Real WorkOS AuthKit tokens authenticate against the MCP server (not just mocked ones), a tenant onboards their Openprovider credentials (via a CLI for now — dashboard lands in Phase 6), and all read tools work against the live Openprovider sandbox.
 
-**In scope**
-- `openprovider/token-manager` per spec §5 Layer 2 — in-memory + Postgres backstop, singleflight, 401 transparent retry, typed failure modes.
-- `openprovider_accounts` migrations.
+**Already delivered early in Phase 2** (the roadmap originally scheduled these here; they shipped with the `check_domain` slice): `openprovider/token-manager` (in-memory + Postgres backstop, singleflight, typed failures), `openprovider_accounts` migration, per-endpoint circuit breaker. Phase 3 extends rather than re-builds them.
+
+**In scope — real AuthKit token authentication (resolves Phase 2 "Gap 2")**
+
+Phase 2 shipped a verifier that *requires* an `act.tnt` claim and derives role from `mcp:read`/`mcp:write` scopes, and was validated only against mocked tokens. Real AuthKit tokens carry neither `act.tnt` nor `mcp:*` scopes (AuthKit's default `scopes_supported` is `email, offline_access, openid, profile`). Phase 3 must close this gap. Decide between:
+
+- **Option A (recommended) — WorkOS Organizations → tenants.** Each tenant maps to a WorkOS organization. The verifier reads the native `org_id` / `organization_id` claim (present in AuthKit tokens once the user authenticates into an organization) instead of a custom `act.tnt`. Add a `workos_org_id` column to `tenants` and an org→tenant lookup in `auth/identity`. Role comes from a persisted `users.role` (the Phase 6 RBAC source, pulled forward to a minimal form here) rather than from scopes.
+- **Option B — custom JWT claims + custom scopes.** Configure WorkOS JWT templates to inject `act.tnt` and define custom `mcp:*` scopes in the dashboard. Keeps Phase 2 code as-is; more dashboard config, less portable.
+
+Scope of the auth work:
+- Brainstorm A vs B, record the decision in `docs/superpowers/decisions/`.
+- Update `createWorkOsVerifier` + `auth/identity` to the chosen claim model.
+- Map WorkOS org/tenant → our `tenants.id`; reject tokens whose org has no tenant.
+- Update the discovery endpoint's advertised scopes to match what AuthKit actually issues.
+- Update unit/e2e fixtures to mint tokens in the real claim shape.
+- WorkOS dashboard config: enable Connect → DCR + register the `/mcp` URL as a Resource Indicator (already noted in the Phase 2 plan Task 1).
+
+**In scope — Openprovider read tools + hardening**
 - Remaining read tools: `list_domains`, `get_domain`, `list_contacts`, `get_contact`.
 - Live sandbox contract tests (spec §10 layer 3 "live sandbox" suite) — opt-in nightly.
-- Circuit breaker around each Openprovider endpoint.
 - `secrets/store` extended with rotation (re-encrypt under new DEK).
 - CLI subcommand `openprovider-mcp tenant:onboard` for ops use until the dashboard exists.
+- Cleanups carried from Phase 2: consolidate the duplicated `getDek` into `secrets/dek.ts`; replace the coarse per-bearer rate limit with a per-principal limiter once auth runs as a Fastify preHandler.
 
 **Exit checklist**
+- [ ] A real AuthKit-issued token authenticates end-to-end and resolves to the correct tenant (manual test against the sandbox + an automated test using a real-shaped token).
+- [ ] Tokens for an org with no mapped tenant are rejected with a clear error.
 - [ ] Nightly live-sandbox contract suite green.
 - [ ] Token-refresh dead-letter alert wired.
 - [ ] Circuit-breaker state metric (`openprovider.circuit_state`) visible.
 - [ ] Token refresh under load: 100 concurrent tool calls trigger exactly one upstream login (singleflight verified).
+- [ ] `getDek` consolidated; per-principal rate limit replaces the per-bearer one.
 - [ ] CHANGELOG entry `0.4.0-phase3`.
 
 **Key risks**
+- The auth claim-model decision (A vs B) is the critical path — it touches the verifier, identity resolver, and every auth test. Brainstorm and decide before writing the Phase 3 plan's tasks.
 - Openprovider rate limits per reseller account during load testing — coordinate with their support, schedule off-hours.
 
 ---
