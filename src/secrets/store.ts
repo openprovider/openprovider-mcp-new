@@ -1,5 +1,6 @@
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import type { Kms } from './kms.js';
+import { getTenantDek } from './dek.js';
 
 export interface SecretsRepo {
   getTenantKey(tenantId: string): Promise<{ wrappedDek: Buffer; kmsKeyArn: string } | null>;
@@ -28,11 +29,7 @@ export function createSecretsStore(deps: {
   const { kms, kmsKeyArn, repo } = deps;
 
   async function getOrCreateDek(tenantId: string): Promise<Buffer> {
-    const existing = await repo.getTenantKey(tenantId);
-    if (existing) return kms.decrypt(existing.kmsKeyArn, existing.wrappedDek);
-    const { plaintext, ciphertext } = await kms.generateDataKey(kmsKeyArn);
-    await repo.setTenantKey(tenantId, { wrappedDek: ciphertext, kmsKeyArn });
-    return plaintext;
+    return getTenantDek({ kms, kmsKeyArn, repo, tenantId });
   }
 
   return {
