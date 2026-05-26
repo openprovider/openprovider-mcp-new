@@ -9,6 +9,8 @@ import { createWorkOsVerifier } from './auth/oauth/workos.js';
 import { createApiKeyResolver } from './auth/api-key.js';
 import type { Principal } from './auth/principal.js';
 import { createDispatcher, type ConfirmDeps, type DispatcherTool } from './mcp/dispatch.js';
+import { WorkOS } from '@workos-inc/node';
+import { registerDashboard } from './dashboard/server.js';
 import { createPgAuditSink } from './audit/pg-sink.js';
 import { createCheckDomainTool } from './tools/check-domain.js';
 import { createListDomainsTool } from './tools/list-domains.js';
@@ -414,6 +416,47 @@ async function main(): Promise<void> {
         },
       },
     ],
+  });
+
+  // ---------------------------------------------------------------------------
+  // Dashboard — mounts on the same Fastify app, before listen so plugins
+  // (cookie, view, static) are registered before the server starts accepting
+  // connections. createMcpServer does NOT call app.ready() internally, so
+  // plugin registration here is safe.
+  // ---------------------------------------------------------------------------
+  const workos = new WorkOS(cfg.workosApiKey, { clientId: cfg.workosClientId });
+  const baseUrl = `http://localhost:${cfg.port}`;
+  const dashboardRedirectUri = `${baseUrl}/dashboard/login/callback`;
+
+  await registerDashboard(app, {
+    cookieSecret: cfg.dashboardCookieSecret,
+
+    buildAuthorizationUrl: () =>
+      workos.userManagement.getAuthorizationUrl({
+        provider: 'authkit',
+        clientId: cfg.workosClientId,
+        redirectUri: dashboardRedirectUri,
+      }),
+
+    authenticateWithCode: async (code: string) => {
+      const resp = await workos.userManagement.authenticateWithCode({
+        clientId: cfg.workosClientId,
+        code,
+      });
+      return {
+        userId: resp.user.id,
+        email: resp.user.email,
+        subject: resp.user.id,
+      };
+    },
+
+    resolveTenant: async (subject: string, email: string) => {
+      const t = await resolveTenant(subject, email);
+      return { tenantId: t.tenantId, userId: t.userId };
+    },
+
+    // Tasks 7–8 will attach page routes; no-op for the Phase 6 scaffold.
+    registerPages: () => {},
   });
 
   const shutdown = async (): Promise<void> => {

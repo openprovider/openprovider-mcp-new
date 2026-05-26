@@ -11,6 +11,8 @@ yarn-error.log
 *.js
 *.js.map
 !examples/*.js
+# Vendored browser assets (not build output — must be tracked)
+!src/dashboard/public/*.js
 
 # IDE files
 .vscode/

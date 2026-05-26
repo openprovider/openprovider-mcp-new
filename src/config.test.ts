@@ -7,6 +7,7 @@ const baseWorkosEnv = {
   WORKOS_AUTHKIT_DOMAIN: 'https://test.authkit.app',
   WORKOS_JWKS_URI: 'https://test.authkit.app/oauth2/jwks',
   WORKOS_ISSUER: 'https://test.authkit.app',
+  DASHBOARD_COOKIE_SECRET: 'test-cookie-secret-min-length-ok',
 };
 
 const baseGcpEnv = {

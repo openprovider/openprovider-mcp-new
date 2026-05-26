@@ -17,6 +17,7 @@ const schema = z.object({
   // No default: for an MCP server the issuer is the AuthKit domain, which is
   // environment-specific. A default would silently mismatch real tokens.
   WORKOS_ISSUER: z.string().url(),
+  DASHBOARD_COOKIE_SECRET: z.string().min(1),
 });
 
 export function loadConfig(
@@ -38,6 +39,7 @@ export function loadConfig(
     workosAuthkitDomain: parsed.WORKOS_AUTHKIT_DOMAIN,
     workosJwksUri: parsed.WORKOS_JWKS_URI,
     workosIssuer: parsed.WORKOS_ISSUER,
+    dashboardCookieSecret: parsed.DASHBOARD_COOKIE_SECRET,
   };
 }
 
