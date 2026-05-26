@@ -14,6 +14,9 @@ import { registerDashboard } from './dashboard/server.js';
 import { registerOverview } from './dashboard/routes/overview.js';
 import { registerOpenprovider } from './dashboard/routes/openprovider.js';
 import { registerPolicy } from './dashboard/routes/policy.js';
+import { registerKeys } from './dashboard/routes/keys.js';
+import { registerAudit } from './dashboard/routes/audit.js';
+import { registerConfirmations } from './dashboard/routes/confirmations.js';
 import { createPgAuditSink } from './audit/pg-sink.js';
 import { createCheckDomainTool } from './tools/check-domain.js';
 import { createListDomainsTool } from './tools/list-domains.js';
@@ -33,6 +36,7 @@ import {
   withIdempotency,
   idempotencyKeyFor,
 } from './policies/idempotency.js';
+import { createConfirmPendingConsume } from './mcp/confirm-pending.js';
 import { createOpenproviderClient } from './openprovider/client.js';
 import { createOpenproviderTokenManager } from './openprovider/token-manager.js';
 import { createPgTokenCache } from './openprovider/token-cache-pg.js';
@@ -309,44 +313,16 @@ async function main(): Promise<void> {
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.
-      // Closes over `tools` (already populated above) via findTool().
-      const confirmPendingConsume = async (input: {
-        confirmationId: string;
-        args: unknown;
-        principal: Principal;
-      }): Promise<{ kind: 'error'; code: string } | { kind: 'ok'; result: unknown }> => {
-        const validated = await validateConfirmation(
-          input.confirmationId,
-          input.args,
-          input.principal,
-        );
-        if (validated.kind === 'error') return validated;
-        const { conf } = validated;
-
-        // Look up the original tool by stored tool_name (not caller-supplied).
-        const originalTool = tools.find((t) => t.name === conf.toolName);
-        if (!originalTool) {
-          return { kind: 'error', code: 'tool_not_found' };
-        }
-
-        // Atomic claim — prevents concurrent double-execution of a billable/destructive op.
-        const won = await claimConfirmation(client, conf.id);
-        if (!won) return { kind: 'error', code: 'confirmation_not_found' }; // already claimed/consumed
-
-        // Execute the original tool's handler and settle.
-        try {
-          const result = await originalTool.handler(input.args, input.principal);
-          // The claim already set consumed_at; committed also records it — harmless.
-          await settleConfirmation(client, conf.id, 'committed');
-          return { kind: 'ok', result };
-        } catch (err) {
-          // Un-claim so a transient failure leaves the confirmation re-approvable.
-          await unclaimConfirmation(client, conf.id);
-          await settleConfirmation(client, conf.id, 'released');
-          const code = (err as { code?: string }).code ?? 'upstream_error';
-          return { kind: 'error', code };
-        }
-      };
+      // Uses the shared createConfirmPendingConsume factory (src/mcp/confirm-pending.ts)
+      // so the dashboard approve handler can call the same logic without duplication.
+      const confirmPendingConsume = createConfirmPendingConsume({
+        tools,
+        validateConfirmation,
+        claimConfirmation: (_c, id) => claimConfirmation(client, id),
+        unclaimConfirmation: (_c, id) => unclaimConfirmation(client, id),
+        settleConfirmation: (_c, id, outcome) => settleConfirmation(client, id, outcome),
+        client,
+      });
 
       // Push confirm_pending after tools is already populated (closure is safe).
       tools.push(createConfirmPendingTool({ consume: confirmPendingConsume }));
@@ -463,6 +439,14 @@ async function main(): Promise<void> {
       registerOverview(pageApp, { pool });
       registerOpenprovider(pageApp, { pool, kms, kmsKeyName: cfg.gcpKmsKeyName });
       registerPolicy(pageApp, { pool });
+      registerKeys(pageApp, { pool });
+      registerAudit(pageApp, { pool });
+      registerConfirmations(pageApp, {
+        pool,
+        kms,
+        kmsKeyName: cfg.gcpKmsKeyName,
+        openproviderClient,
+      });
     },
   });
 

@@ -1,0 +1,51 @@
+<% layout('./layout') %>
+<h1>Pending Confirmations</h1>
+
+<% if (it.approveResult) { %>
+<div style="background:<%= it.approveResult.kind === 'ok' ? '#e8f5e9' : '#ffebee' %>;border:1px solid <%= it.approveResult.kind === 'ok' ? '#4caf50' : '#f44336' %>;padding:0.75rem 1rem;margin-bottom:1.5rem;border-radius:4px">
+  <strong><%= it.approveResult.kind === 'ok' ? '✓' : '✗' %></strong>
+  <%= it.approveResult.message %>
+</div>
+<% } %>
+
+<% if (it.pending.length === 0) { %>
+<p>No pending confirmations.</p>
+<% } else { %>
+<p style="color:#555;font-size:0.875rem"><%= it.pending.length %> pending confirmation<%= it.pending.length !== 1 ? 's' : '' %></p>
+
+<div style="display:flex;flex-direction:column;gap:1rem">
+  <% it.pending.forEach(function(c) { %>
+  <div style="border:1px solid #ddd;border-radius:6px;padding:1rem;background:#fafafa" id="conf-<%= c.id %>">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem">
+      <div>
+        <strong style="font-family:monospace"><%= c.tool_name %></strong>
+        <span style="margin-left:0.75rem;color:#555;font-size:0.875rem"><%= c.summary_text %></span>
+      </div>
+      <div style="font-size:0.875rem;color:#555">
+        Expires: <%= new Date(c.expires_at).toISOString().slice(0,19).replace('T',' ') %> UTC
+      </div>
+    </div>
+    <div style="margin-top:0.5rem;font-size:0.875rem;color:#555">
+      <span>Estimated cost: <strong>€<%= c.estimated_cost_eur %></strong></span>
+      &ensp;|&ensp;
+      <span>Requested by: <code><%= c.principal_subject %></code></span>
+      &ensp;|&ensp;
+      <span>Required approvers: <code><%= c.required_approver_roles.join(', ') %></code></span>
+    </div>
+    <div style="margin-top:0.75rem">
+      <form method="post" action="/dashboard/confirmations/<%= c.id %>/approve"
+            onsubmit="return confirm('Approve and execute this action? This may incur costs.')">
+        <input type="hidden" name="_csrf" value="<%= it.csrf %>">
+        <button type="submit" style="background:#1565c0;color:#fff;border:none;padding:0.4rem 1rem;border-radius:4px;cursor:pointer;font-size:0.875rem">
+          Approve &amp; Execute
+        </button>
+      </form>
+    </div>
+  </div>
+  <% }); %>
+</div>
+<% } %>
+
+<p style="margin-top:2rem;font-size:0.875rem;color:#888">
+  Confirmations expire automatically. Approved actions are executed immediately and cannot be undone.
+</p>

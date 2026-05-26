@@ -1,0 +1,72 @@
+<% layout('./layout') %>
+<h1>Audit Log</h1>
+
+<section style="margin-bottom:1.5rem">
+  <form method="get" action="/dashboard/audit" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end">
+    <div>
+      <label for="event_type" style="display:block;font-size:0.875rem;margin-bottom:0.2rem">Event type</label>
+      <input type="text" id="event_type" name="event_type" value="<%= it.eventType %>" placeholder="e.g. tool_call" style="padding:0.35rem 0.5rem">
+    </div>
+    <div>
+      <label for="tool" style="display:block;font-size:0.875rem;margin-bottom:0.2rem">Tool name</label>
+      <input type="text" id="tool" name="tool" value="<%= it.tool %>" placeholder="e.g. check_domain" style="padding:0.35rem 0.5rem">
+    </div>
+    <div>
+      <label for="limit" style="display:block;font-size:0.875rem;margin-bottom:0.2rem">Limit</label>
+      <select id="limit" name="limit" style="padding:0.35rem 0.5rem">
+        <% [25,50,100,200].forEach(function(n) { %>
+        <option value="<%= n %>" <%= it.limit === n ? 'selected' : '' %>><%= n %></option>
+        <% }); %>
+      </select>
+    </div>
+    <button type="submit" style="padding:0.35rem 1rem">Filter</button>
+    <a href="/dashboard/audit" style="padding:0.35rem 0.5rem;font-size:0.875rem">Reset</a>
+    <a href="/dashboard/audit/export" style="margin-left:auto;padding:0.35rem 1rem;background:#1a1a2e;color:#fff;text-decoration:none;border-radius:4px">Export NDJSON</a>
+  </form>
+</section>
+
+<p style="color:#555;font-size:0.875rem">
+  Showing <%= it.offset + 1 %>–<%= Math.min(it.offset + it.limit, it.total) %> of <%= it.total %> events
+</p>
+
+<% if (it.events.length === 0) { %>
+<p>No audit events found.</p>
+<% } else { %>
+<div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:0.875rem">
+    <thead>
+      <tr style="background:#f5f5f5">
+        <th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:1px solid #ddd">Time</th>
+        <th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:1px solid #ddd">Event Type</th>
+        <th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:1px solid #ddd">Tool</th>
+        <th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:1px solid #ddd">Principal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% it.events.forEach(function(e) { %>
+      <tr>
+        <td style="padding:0.4rem 0.5rem;border-bottom:1px solid #eee;white-space:nowrap">
+          <%= new Date(e.occurred_at).toISOString().slice(0,19).replace('T',' ') %>
+        </td>
+        <td style="padding:0.4rem 0.5rem;border-bottom:1px solid #eee"><%= e.event_type %></td>
+        <td style="padding:0.4rem 0.5rem;border-bottom:1px solid #eee;font-family:monospace">
+          <%= e.tool_name || '—' %>
+        </td>
+        <td style="padding:0.4rem 0.5rem;border-bottom:1px solid #eee;font-size:0.8rem;color:#555">
+          <%= e.actor_subject %>
+        </td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>
+
+<div style="display:flex;gap:1rem;margin-top:1rem;align-items:center">
+  <% if (it.hasPrev) { %>
+  <a href="/dashboard/audit?event_type=<%= encodeURIComponent(it.eventType) %>&tool=<%= encodeURIComponent(it.tool) %>&limit=<%= it.limit %>&offset=<%= it.prevOffset %>">&larr; Previous</a>
+  <% } %>
+  <% if (it.hasNext) { %>
+  <a href="/dashboard/audit?event_type=<%= encodeURIComponent(it.eventType) %>&tool=<%= encodeURIComponent(it.tool) %>&limit=<%= it.limit %>&offset=<%= it.nextOffset %>">Next &rarr;</a>
+  <% } %>
+</div>
+<% } %>

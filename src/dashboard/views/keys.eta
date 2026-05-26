@@ -1,0 +1,71 @@
+<% layout('./layout') %>
+<h1>API Keys</h1>
+
+<% if (it.newKey) { %>
+<div style="background:#e8f5e9;border:2px solid #4caf50;padding:1rem;margin-bottom:1.5rem;border-radius:4px">
+  <h2 style="margin-top:0;color:#2e7d32">New API Key Created</h2>
+  <p style="color:#c62828"><strong>Copy this key now — it will NOT be shown again.</strong></p>
+  <div style="font-family:monospace;font-size:1rem;background:#fff;padding:0.75rem;border:1px solid #a5d6a7;border-radius:4px;word-break:break-all">
+    <%= it.newKey.key %>
+  </div>
+  <p style="margin-bottom:0;font-size:0.875rem;color:#555">
+    Name: <strong><%= it.newKey.name %></strong> &mdash; Prefix: <code><%= it.newKey.prefix %></code>
+  </p>
+</div>
+<% } %>
+
+<section style="margin-bottom:2rem">
+  <h2>Issue New Key</h2>
+  <form method="post" action="/dashboard/keys/issue">
+    <input type="hidden" name="_csrf" value="<%= it.csrf %>">
+    <label for="key-name">Key name</label>
+    <input type="text" id="key-name" name="name" placeholder="e.g. CI/CD bot" style="margin-left:0.5rem;padding:0.35rem 0.5rem">
+    <button type="submit" style="margin-left:0.5rem;padding:0.35rem 1rem">Issue Key</button>
+  </form>
+</section>
+
+<section>
+  <h2>Existing Keys</h2>
+  <% if (it.keys.length === 0) { %>
+  <p>No API keys yet.</p>
+  <% } else { %>
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#f5f5f5">
+        <th style="text-align:left;padding:0.5rem;border-bottom:1px solid #ddd">Prefix</th>
+        <th style="text-align:left;padding:0.5rem;border-bottom:1px solid #ddd">Name</th>
+        <th style="text-align:left;padding:0.5rem;border-bottom:1px solid #ddd">Status</th>
+        <th style="text-align:left;padding:0.5rem;border-bottom:1px solid #ddd">Last Used</th>
+        <th style="text-align:left;padding:0.5rem;border-bottom:1px solid #ddd">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% it.keys.forEach(function(k) { %>
+      <tr id="key-row-<%= k.id %>">
+        <td style="padding:0.5rem;border-bottom:1px solid #eee;font-family:monospace"><%= k.prefix %>&hellip;</td>
+        <td style="padding:0.5rem;border-bottom:1px solid #eee"><%= k.name %></td>
+        <td style="padding:0.5rem;border-bottom:1px solid #eee">
+          <span style="color:<%= k.status === 'active' ? '#2e7d32' : '#c62828' %>">
+            <%= k.status %>
+          </span>
+        </td>
+        <td style="padding:0.5rem;border-bottom:1px solid #eee">
+          <%= k.last_used_at ? new Date(k.last_used_at).toISOString().slice(0,19).replace('T',' ') : 'Never' %>
+        </td>
+        <td style="padding:0.5rem;border-bottom:1px solid #eee">
+          <% if (k.status === 'active') { %>
+          <form method="post" action="/dashboard/keys/<%= k.id %>/revoke" style="display:inline"
+                onsubmit="return confirm('Revoke this key? This cannot be undone.')">
+            <input type="hidden" name="_csrf" value="<%= it.csrf %>">
+            <button type="submit" style="color:#c62828;background:none;border:1px solid #c62828;padding:0.2rem 0.6rem;cursor:pointer;border-radius:3px">Revoke</button>
+          </form>
+          <% } else { %>
+          <span style="color:#999;font-size:0.875rem">—</span>
+          <% } %>
+        </td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+  <% } %>
+</section>

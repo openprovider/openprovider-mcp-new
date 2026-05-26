@@ -26,6 +26,8 @@ export default defineConfig({
         'src/dashboard/routes/**',
         'src/dashboard/with-tenant-conn.ts',
         'src/tenants/onboard-credentials.ts',
+        // Confirm-pending shared factory covered by integration tests:
+        'src/mcp/confirm-pending.ts',
       ],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },
