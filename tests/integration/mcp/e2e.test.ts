@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import nock from 'nock';
 import type pg from 'pg';
 import type { FastifyInstance } from 'fastify';
@@ -15,7 +16,11 @@ import { createTenantResolver } from '../../../src/auth/tenant-resolver.js';
 import { createAwsKms } from '../../../src/secrets/aws-kms.js';
 import { createSecretsStore } from '../../../src/secrets/store.js';
 import { createDbSecretsRepo } from '../../../src/secrets/db-repo.js';
-import { createDispatcher } from '../../../src/mcp/dispatch.js';
+import {
+  createDispatcher,
+  type ConfirmDeps,
+  type DispatcherTool,
+} from '../../../src/mcp/dispatch.js';
 import { createPgAuditSink } from '../../../src/audit/pg-sink.js';
 import { createCheckDomainTool } from '../../../src/tools/check-domain.js';
 import { createOpenproviderClient } from '../../../src/openprovider/client.js';
@@ -23,6 +28,28 @@ import { createOpenproviderTokenManager } from '../../../src/openprovider/token-
 import { createPgTokenCache } from '../../../src/openprovider/token-cache-pg.js';
 import { OpenproviderAccountNotConnected } from '../../../src/openprovider/errors.js';
 import type { Principal } from '../../../src/auth/principal.js';
+
+// Phase 4 imports
+import {
+  getPolicy,
+  upsertPolicy,
+  liveSpendCents,
+  proposeConfirmation,
+  loadConfirmation,
+  settleConfirmation,
+  canonicalArgsHash,
+} from '../../../src/policies/repo.js';
+import { evaluate } from '../../../src/policies/engine.js';
+import {
+  toolMode,
+  requiredApproverRoles,
+  DEFAULT_POLICY,
+  type Role,
+} from '../../../src/policies/schema.js';
+import { centsToEur } from '../../../src/policies/money.js';
+import { createListPendingConfirmationsTool } from '../../../src/tools/list-pending-confirmations.js';
+import { createConfirmPendingTool } from '../../../src/tools/confirm-pending.js';
+import type { LoadedConfirmation } from '../../../src/policies/repo.js';
 
 const TENANT_A = '00000000-0000-0000-0000-0000000000a1';
 const TENANT_B = '00000000-0000-0000-0000-0000000000b1';
@@ -443,4 +470,462 @@ describe('phase 2 end-to-end', () => {
     const inner = JSON.parse(innerText ?? '{}') as { results: { domain: string }[] };
     expect(inner.results[0]?.domain).toBe('auto.com');
   }, 90_000);
+
+  // ---------------------------------------------------------------------------
+  // Phase 4: synthetic confirm tool — propose → confirm_pending → committed
+  // ---------------------------------------------------------------------------
+  describe('phase 4: confirm flow', () => {
+    let p4App: FastifyInstance;
+    let p4BaseUrl: string;
+
+    // Synthetic tool: priced at a fixed 1500 cents (€15) by the test pricer.
+    const phase4SpendTool: DispatcherTool = {
+      name: 'phase4.spend',
+      description: 'Synthetic billable tool for Phase 4 e2e testing.',
+      inputSchema: z.object({ note: z.string().default('x') }),
+      handler: () => Promise.resolve({ spent: true }),
+    };
+
+    // Fixed pricer: returns 1500 cents for phase4.spend, 0 for everything else.
+    const fixedPricer = {
+      price: async (toolName: string): Promise<number> => {
+        if (toolName === 'phase4.spend') return 1500;
+        return 0;
+      },
+    };
+
+    const CONFIRM_TTL_MS = 5 * 60 * 1000;
+
+    beforeAll(async () => {
+      // Build a dispatchFactory that mirrors server.ts but:
+      //   - registers phase4.spend (synthetic)
+      //   - uses fixedPricer (no Openprovider upstream needed)
+      //   - policy tools map includes 'phase4.spend':'confirm'
+      async function p4DispatchFactory(principal: Principal) {
+        const client = await pool.connect();
+        let inTx = false;
+        try {
+          await client.query('BEGIN');
+          inTx = true;
+          await client.query('SET LOCAL ROLE app_role');
+          await client.query('SELECT set_config($1, $2, true)', [
+            'app.current_tenant',
+            principal.tenantId,
+          ]);
+
+          // Shared validation helper (mirrors server.ts validateConfirmation)
+          const validateConfirmation = async (
+            token: string,
+            args: unknown,
+            p: Principal,
+          ): Promise<
+            { kind: 'error'; code: string } | { kind: 'ok'; conf: LoadedConfirmation }
+          > => {
+            const conf = await loadConfirmation(client, token);
+            if (!conf) return { kind: 'error', code: 'confirmation_not_found' };
+            if (conf.consumedAt) return { kind: 'error', code: 'confirmation_not_found' };
+            if (conf.expiresAt.getTime() <= Date.now()) {
+              return { kind: 'error', code: 'confirmation_expired' };
+            }
+            if (!canonicalArgsHash(args, p.tenantId).equals(conf.argsHash)) {
+              return { kind: 'error', code: 'validation_failed' };
+            }
+            const callerRole: Role | '' = p.kind === 'user' ? p.role : '';
+            if (!conf.requiredApproverRoles.includes(callerRole as Role)) {
+              return { kind: 'error', code: 'approver_role_required' };
+            }
+            // Re-price with fixed pricer (no drift possible in tests)
+            const fresh = await fixedPricer.price(conf.toolName);
+            if (fresh > Math.round(conf.estimatedCostCents * 1.05)) {
+              await settleConfirmation(client, conf.id, 'released');
+              return { kind: 'error', code: 'price_changed' };
+            }
+            return { kind: 'ok', conf };
+          };
+
+          // Meta-tools bypass the policy gate (same fix as src/server.ts).
+          const META_TOOLS = new Set(['confirm_pending', 'list_pending_confirmations']);
+
+          // ConfirmDeps wired with fixedPricer
+          const confirm: ConfirmDeps = {
+            resolveMode: async (toolName) => {
+              if (META_TOOLS.has(toolName)) return 'allow';
+              const policy = await getPolicy(client, principal.tenantId);
+              return toolMode(policy, toolName);
+            },
+
+            propose: async ({ toolName, args, principal: p }) => {
+              // Serialize on the policy row
+              await client.query('SELECT 1 FROM policies WHERE tenant_id = $1 FOR UPDATE', [
+                p.tenantId,
+              ]);
+              const policy = await getPolicy(client, p.tenantId);
+              const live = await liveSpendCents(client, p.tenantId);
+              const estimatedCostCents = await fixedPricer.price(toolName);
+              const callerRole: Role = p.kind === 'user' ? p.role : 'viewer';
+              const decision = evaluate({
+                toolName,
+                args,
+                role: callerRole,
+                policy,
+                liveSpendCents: live,
+                estimatedCostCents,
+                tldsInArgs: [],
+              });
+              if (decision.decision === 'deny') {
+                return { kind: 'denied', reason: decision.reason ?? 'denied' };
+              }
+              if (decision.decision === 'allow') {
+                return { kind: 'denied', reason: 'not_confirm_mode' };
+              }
+              const approvers = requiredApproverRoles(policy, toolName);
+              const rec = await proposeConfirmation({
+                client,
+                tenantId: p.tenantId,
+                principalSubject: p.subject,
+                toolName,
+                args,
+                summaryText: `${toolName} (est. €${centsToEur(estimatedCostCents)})`,
+                estimatedCostCents,
+                requiredApproverRoles: approvers,
+                ttlMs: CONFIRM_TTL_MS,
+              });
+              return {
+                kind: 'proposed',
+                result: {
+                  confirmationId: rec.id,
+                  confirmationToken: rec.id,
+                  summary: rec.summaryText,
+                  estimatedCostEur: centsToEur(rec.estimatedCostCents),
+                  requiredApproverRoles: rec.requiredApproverRoles,
+                  expiresAt: rec.expiresAt.toISOString(),
+                },
+              };
+            },
+
+            consume: async ({ token, args, principal: p }) => {
+              const validated = await validateConfirmation(token, args, p);
+              if (validated.kind === 'error') return validated;
+              return { kind: 'ok', confirmationId: validated.conf.id };
+            },
+
+            settle: async (confirmationId, outcome) => {
+              await settleConfirmation(client, confirmationId, outcome);
+            },
+          };
+
+          // Base tools + list_pending_confirmations
+          const tools: DispatcherTool[] = [
+            phase4SpendTool,
+            createListPendingConfirmationsTool({ getClient: () => client }),
+          ];
+
+          // confirm_pending — Path 2: validates + executes the original tool
+          const confirmPendingConsume = async (input: {
+            confirmationId: string;
+            args: unknown;
+            principal: Principal;
+          }): Promise<{ kind: 'error'; code: string } | { kind: 'ok'; result: unknown }> => {
+            const validated = await validateConfirmation(
+              input.confirmationId,
+              input.args,
+              input.principal,
+            );
+            if (validated.kind === 'error') return validated;
+            const { conf } = validated;
+            const originalTool = tools.find((t) => t.name === conf.toolName);
+            if (!originalTool) return { kind: 'error', code: 'tool_not_found' };
+            try {
+              const result = await originalTool.handler(input.args, input.principal);
+              await settleConfirmation(client, conf.id, 'committed');
+              return { kind: 'ok', result };
+            } catch (err) {
+              await settleConfirmation(client, conf.id, 'released');
+              const code = (err as { code?: string }).code ?? 'upstream_error';
+              return { kind: 'error', code };
+            }
+          };
+
+          tools.push(createConfirmPendingTool({ consume: confirmPendingConsume }));
+
+          const dispatch = createDispatcher({
+            tools,
+            audit: createPgAuditSink(client),
+            confirm,
+          });
+
+          return {
+            dispatch,
+            cleanup: async () => {
+              try {
+                if (inTx) await client.query('COMMIT');
+              } catch {
+                try {
+                  await client.query('ROLLBACK');
+                } catch {
+                  /* ignore */
+                }
+              } finally {
+                inTx = false;
+                client.release();
+              }
+            },
+          };
+        } catch (err) {
+          try {
+            if (inTx) await client.query('ROLLBACK');
+          } catch {
+            /* ignore */
+          }
+          client.release();
+          throw err;
+        }
+      }
+
+      p4App = await createMcpServer({
+        devToken: 'never-used-p4',
+        devPrincipal: {
+          kind: 'user',
+          tenantId: '00000000-0000-0000-0000-000000000000',
+          userId: '00000000-0000-0000-0000-000000000000',
+          subject: 'dev',
+          scopes: [],
+          role: 'viewer',
+        },
+        verifier: createWorkOsVerifier({
+          clientId: jwks.audience,
+          issuer: jwks.issuer,
+          jwksUri: jwks.jwksUri,
+        }),
+        resolveTenant: createTenantResolver(pool),
+        dispatchFactory: p4DispatchFactory,
+      });
+      await p4App.listen({ host: '127.0.0.1', port: 0 });
+      const addr = p4App.server.address() as AddressInfo;
+      p4BaseUrl = `http://127.0.0.1:${addr.port}`;
+    }, 120_000);
+
+    afterAll(async () => {
+      if (p4App) await p4App.close();
+    });
+
+    /**
+     * Initialize an MCP session on the Phase 4 server.
+     */
+    async function p4InitSession(bearer: string): Promise<string> {
+      const r = await fetch(`${p4BaseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${bearer}`,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 0,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-06-18',
+            capabilities: {},
+            clientInfo: { name: 'e2e-p4', version: '0' },
+          },
+        }),
+      });
+      expect(r.status).toBe(200);
+      const sid = r.headers.get('mcp-session-id');
+      if (!sid) throw new Error('p4 initialize did not return Mcp-Session-Id');
+      return sid;
+    }
+
+    /**
+     * Call any named tool on the Phase 4 server.
+     */
+    async function p4CallTool(
+      sid: string,
+      bearer: string,
+      toolName: string,
+      toolArgs: unknown,
+    ): Promise<unknown> {
+      const r = await fetch(`${p4BaseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${bearer}`,
+          'mcp-session-id': sid,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: toolName, arguments: toolArgs },
+        }),
+      });
+      const text = await r.text();
+      const jsonLine = text.includes('data:')
+        ? text
+            .split('\n')
+            .find((l) => l.startsWith('data:'))!
+            .slice(5)
+            .trim()
+        : text;
+      return JSON.parse(jsonLine) as unknown;
+    }
+
+    /**
+     * Provision a fresh tenant via auto-provisioning (real-shaped JWT with sub+email),
+     * upsert its policy to the given doc, and return { tenantId, bearer }.
+     */
+    async function provisionTenant(
+      sub: string,
+      email: string,
+      limitEur: number,
+    ): Promise<{ tenantId: string; bearer: string; sid: string }> {
+      const bearer = await jwks.mintToken({ sub, email });
+      // Initialize a session — this triggers resolve_or_provision_tenant.
+      const sid = await p4InitSession(bearer);
+
+      // Resolve the provisioned tenant id via the SECURITY DEFINER fn.
+      const resolverClient = await pool.connect();
+      let tenantId: string;
+      try {
+        await resolverClient.query('SET ROLE app_role');
+        const r = await resolverClient.query<{ tenant_id: string }>(
+          'SELECT * FROM resolve_or_provision_tenant($1, $2)',
+          [sub, email],
+        );
+        tenantId = r.rows[0]!.tenant_id;
+      } finally {
+        resolverClient.release();
+      }
+
+      // Raise spend cap and add phase4.spend to the policy's tools map.
+      await runAsTenant(pool, tenantId, async (c) => {
+        await upsertPolicy(c, tenantId, {
+          ...DEFAULT_POLICY,
+          spend_caps: { window: 'month', limit_eur: limitEur },
+          tools: {
+            ...DEFAULT_POLICY.tools,
+            'phase4.spend': 'confirm',
+          },
+        });
+      });
+
+      return { tenantId, bearer, sid };
+    }
+
+    it('scenario P4-a/b/c: propose → confirm_pending → committed; live spend = 1500', async () => {
+      const { tenantId, bearer, sid } = await provisionTenant('p4_user_1', 'p4_1@example.com', 100);
+
+      // (a) Propose phase4.spend — no confirm token → confirmation_required
+      const proposeBody = (await p4CallTool(sid, bearer, 'phase4.spend', { note: 'x' })) as {
+        result?: { content: { text: string }[] };
+        error?: { message: string; data?: { code?: string } };
+      };
+
+      // The dispatcher returns the propose result wrapped in MCP result.content[0].text
+      const proposeText = proposeBody.result?.content[0]?.text;
+      expect(
+        proposeText,
+        'propose should return a result, not error: ' + JSON.stringify(proposeBody),
+      ).toBeDefined();
+      const proposeResult = JSON.parse(proposeText ?? '{}') as {
+        confirmationId?: string;
+        confirmationToken?: string;
+        summary?: string;
+        estimatedCostEur?: number;
+      };
+      expect(proposeResult.confirmationId, 'confirmationId must be present').toBeTruthy();
+      expect(proposeResult.confirmationToken).toBe(proposeResult.confirmationId);
+      expect(proposeResult.estimatedCostEur).toBe(15); // 1500 cents = €15
+
+      const confirmationId = proposeResult.confirmationId!;
+
+      // (b) Call confirm_pending with that id — args must match what was proposed
+      // The dispatcher stored hash of zod-parsed args = { note: 'x' }
+      const sid2 = await p4InitSession(bearer); // fresh session for the confirm call
+      const confirmBody = (await p4CallTool(sid2, bearer, 'confirm_pending', {
+        confirmation_id: confirmationId,
+        args: { note: 'x' },
+      })) as {
+        result?: { content: { text: string }[] };
+        error?: { message: string; data?: { code?: string } };
+      };
+
+      const confirmText = confirmBody.result?.content[0]?.text;
+      expect(
+        confirmText,
+        'confirm_pending should succeed, got: ' + JSON.stringify(confirmBody),
+      ).toBeDefined();
+      const confirmResult = JSON.parse(confirmText ?? '{}') as { spent?: boolean };
+      expect(confirmResult.spent).toBe(true);
+
+      // (c) Verify live spend = 1500 cents and reservation is committed
+      await runAsTenant(pool, tenantId, async (c) => {
+        const spendCents = await liveSpendCents(c, tenantId);
+        expect(spendCents).toBe(1500);
+
+        // Check the reservation is committed
+        const r = await c.query<{ status: string }>(
+          `SELECT sr.status FROM spend_reservations sr
+             JOIN confirmations co ON co.id = sr.confirmation_id
+             WHERE co.id = $1`,
+          [confirmationId],
+        );
+        expect(r.rows[0]?.status).toBe('committed');
+      });
+    }, 90_000);
+
+    it('scenario P4-d: 7th proposal denied — cap exceeded (6×€15=€90 ≤ €100; 7th pushes to €105)', async () => {
+      // Fresh tenant at €100 cap
+      const { tenantId, bearer } = await provisionTenant('p4_user_2', 'p4_2@example.com', 100);
+
+      // Propose 6 times — all should succeed (6×1500=9000 ≤ 10000)
+      for (let i = 0; i < 6; i++) {
+        const sid = await p4InitSession(bearer);
+        const body = (await p4CallTool(sid, bearer, 'phase4.spend', { note: 'x' })) as {
+          result?: { content: { text: string }[] };
+          error?: { message: string; data?: { code?: string } };
+        };
+        const text = body.result?.content[0]?.text;
+        expect(
+          text,
+          `proposal ${i + 1} should return confirmation_required, got: ${JSON.stringify(body)}`,
+        ).toBeDefined();
+        const r = JSON.parse(text ?? '{}') as { confirmationId?: string };
+        expect(r.confirmationId, `proposal ${i + 1} should have confirmationId`).toBeTruthy();
+      }
+
+      // Verify live spend is now 9000 cents (6 pending reservations)
+      await runAsTenant(pool, tenantId, async (c) => {
+        expect(await liveSpendCents(c, tenantId)).toBe(9000);
+      });
+
+      // 7th proposal → policy_denied (9000 + 1500 = 10500 > 10000)
+      const sid7 = await p4InitSession(bearer);
+      const body7 = (await p4CallTool(sid7, bearer, 'phase4.spend', { note: 'x' })) as {
+        error?: { message: string; data?: { code?: string } };
+      };
+      expect(
+        body7.error,
+        '7th proposal should be denied, got: ' + JSON.stringify(body7),
+      ).toBeDefined();
+      expect(body7.error?.data?.code).toBe('policy_denied');
+    }, 120_000);
+
+    it('scenario P4-e: tenant with €0 cap → phase4.spend propose → policy_denied', async () => {
+      // Default limit_eur: 0 → any spend is denied
+      const { bearer } = await provisionTenant('p4_user_3', 'p4_3@example.com', 0);
+
+      const sid = await p4InitSession(bearer);
+      const body = (await p4CallTool(sid, bearer, 'phase4.spend', { note: 'x' })) as {
+        error?: { message: string; data?: { code?: string } };
+      };
+      expect(
+        body.error,
+        '€0 tenant should get policy_denied, got: ' + JSON.stringify(body),
+      ).toBeDefined();
+      expect(body.error?.data?.code).toBe('policy_denied');
+    }, 60_000);
+  });
 });

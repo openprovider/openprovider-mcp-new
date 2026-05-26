@@ -179,8 +179,14 @@ async function main(): Promise<void> {
       };
 
       // Path 1: ConfirmDeps for the dispatcher (same-principal re-call with a token).
+      // Meta-tools that are always allowed regardless of tenant policy.
+      const META_TOOLS = new Set(['confirm_pending', 'list_pending_confirmations']);
+
       const confirm: ConfirmDeps = {
         resolveMode: async (toolName) => {
+          // Meta-tools bypass the policy gate — they are control-plane operations,
+          // not billable domain actions, and should never be denied by the policy engine.
+          if (META_TOOLS.has(toolName)) return 'allow';
           const policy = await getPolicy(client, principal.tenantId);
           return toolMode(policy, toolName);
         },
