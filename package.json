@@ -21,6 +21,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "tenant:onboard": "tsx scripts/tenant-onboard.ts",
+    "policy:show": "tsx scripts/policy.ts show",
+    "policy:set": "tsx scripts/policy.ts set",
     "prepare": "husky"
   },
   "dependencies": {
