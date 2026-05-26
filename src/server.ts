@@ -7,13 +7,15 @@ import { createDb } from './db/client.js';
 import { createAwsKms } from './secrets/aws-kms.js';
 import { createWorkOsVerifier } from './auth/oauth/workos.js';
 import type { Principal } from './auth/principal.js';
-import { createDispatcher } from './mcp/dispatch.js';
+import { createDispatcher, type ConfirmDeps, type DispatcherTool } from './mcp/dispatch.js';
 import { createPgAuditSink } from './audit/pg-sink.js';
 import { createCheckDomainTool } from './tools/check-domain.js';
 import { createListDomainsTool } from './tools/list-domains.js';
 import { createGetDomainTool } from './tools/get-domain.js';
 import { createListContactsTool } from './tools/list-contacts.js';
 import { createGetContactTool } from './tools/get-contact.js';
+import { createListPendingConfirmationsTool } from './tools/list-pending-confirmations.js';
+import { createConfirmPendingTool } from './tools/confirm-pending.js';
 import { createOpenproviderClient } from './openprovider/client.js';
 import { createOpenproviderTokenManager } from './openprovider/token-manager.js';
 import { createPgTokenCache } from './openprovider/token-cache-pg.js';
@@ -21,6 +23,19 @@ import { createSecretsStore } from './secrets/store.js';
 import { createDbSecretsRepo } from './secrets/db-repo.js';
 import { createTenantResolver } from './auth/tenant-resolver.js';
 import { OpenproviderAccountNotConnected } from './openprovider/errors.js';
+import {
+  getPolicy,
+  liveSpendCents,
+  proposeConfirmation,
+  loadConfirmation,
+  settleConfirmation,
+  canonicalArgsHash,
+} from './policies/repo.js';
+import { evaluate } from './policies/engine.js';
+import { toolMode, requiredApproverRoles, type Role } from './policies/schema.js';
+import { createPricing, DRIFT_TOLERANCE } from './policies/pricing.js';
+import { centsToEur } from './policies/money.js';
+import type { LoadedConfirmation } from './policies/repo.js';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -108,17 +123,184 @@ async function main(): Promise<void> {
         }),
       });
 
-      const tools = [
+      // Safe token retrieval — non-billable tools price at 0 without needing a real token.
+      // If no Openprovider account is connected, return '' and let pricing.price() return 0
+      // (which it will for non-billable tools). For billable tools the upstream call will
+      // surface openprovider_not_connected naturally.
+      const tokenManagerSafeToken = async (tenantId: string): Promise<string> => {
+        try {
+          return await tokenManager.getToken(tenantId);
+        } catch (err) {
+          if (err instanceof OpenproviderAccountNotConnected) return '';
+          throw err;
+        }
+      };
+
+      const pricing = createPricing({ client: openproviderClient });
+      const CONFIRM_TTL_MS = 5 * 60 * 1000;
+
+      const tldsOf = (toolName: string, args: unknown): string[] => {
+        if (toolName !== 'register_domain' && toolName !== 'update_domain') return [];
+        const a = args as { domain?: { extension: string }; domains?: { extension: string }[] };
+        if (a.domain) return [a.domain.extension];
+        if (a.domains) return a.domains.map((d) => d.extension);
+        return [];
+      };
+
+      // Shared validation helper — used by both Path 1 (dispatcher consume) and
+      // Path 2 (confirm_pending's consume). Returns the loaded confirmation on ok,
+      // or an error object so both paths stay in sync.
+      const validateConfirmation = async (
+        token: string,
+        args: unknown,
+        p: Principal,
+      ): Promise<{ kind: 'error'; code: string } | { kind: 'ok'; conf: LoadedConfirmation }> => {
+        const conf = await loadConfirmation(client, token);
+        if (!conf) return { kind: 'error', code: 'confirmation_not_found' };
+        if (conf.consumedAt) return { kind: 'error', code: 'confirmation_not_found' };
+        if (conf.expiresAt.getTime() <= Date.now()) {
+          return { kind: 'error', code: 'confirmation_expired' };
+        }
+        if (!canonicalArgsHash(args, p.tenantId).equals(conf.argsHash)) {
+          return { kind: 'error', code: 'validation_failed' };
+        }
+        const callerRole: Role | '' = p.kind === 'user' ? p.role : '';
+        if (!conf.requiredApproverRoles.includes(callerRole as Role)) {
+          return { kind: 'error', code: 'approver_role_required' };
+        }
+        // Re-price using the stored tool name (not a caller-supplied name) + drift guard.
+        const freshToken = await tokenManagerSafeToken(p.tenantId);
+        const fresh = await pricing.price(conf.toolName, args, freshToken);
+        if (fresh > Math.round(conf.estimatedCostCents * (1 + DRIFT_TOLERANCE))) {
+          await settleConfirmation(client, conf.id, 'released');
+          return { kind: 'error', code: 'price_changed' };
+        }
+        return { kind: 'ok', conf };
+      };
+
+      // Path 1: ConfirmDeps for the dispatcher (same-principal re-call with a token).
+      const confirm: ConfirmDeps = {
+        resolveMode: async (toolName) => {
+          const policy = await getPolicy(client, principal.tenantId);
+          return toolMode(policy, toolName);
+        },
+
+        propose: async ({ toolName, args, principal: p }) => {
+          // Serialize on the policy row to prevent concurrent overshoot.
+          await client.query('SELECT 1 FROM policies WHERE tenant_id = $1 FOR UPDATE', [
+            p.tenantId,
+          ]);
+          const policy = await getPolicy(client, p.tenantId);
+          const live = await liveSpendCents(client, p.tenantId);
+          const opToken = await tokenManagerSafeToken(p.tenantId);
+          const estimatedCostCents = await pricing.price(toolName, args, opToken);
+          const callerRole: Role = p.kind === 'user' ? p.role : 'viewer';
+          const decision = evaluate({
+            toolName,
+            args,
+            role: callerRole,
+            policy,
+            liveSpendCents: live,
+            estimatedCostCents,
+            tldsInArgs: tldsOf(toolName, args),
+          });
+          if (decision.decision === 'deny') {
+            return { kind: 'denied', reason: decision.reason };
+          }
+          if (decision.decision === 'allow') {
+            // allow-mode tools shouldn't reach propose; treat as misconfiguration.
+            return { kind: 'denied', reason: 'not_confirm_mode' };
+          }
+          // decision === 'requires_confirmation'
+          const approvers = requiredApproverRoles(policy, toolName);
+          const rec = await proposeConfirmation({
+            client,
+            tenantId: p.tenantId,
+            principalSubject: p.subject,
+            toolName,
+            args,
+            summaryText: `${toolName} (est. €${centsToEur(estimatedCostCents)})`,
+            estimatedCostCents,
+            requiredApproverRoles: approvers,
+            ttlMs: CONFIRM_TTL_MS,
+          });
+          return {
+            kind: 'proposed',
+            result: {
+              confirmationId: rec.id,
+              confirmationToken: rec.id, // token == id in Phase 4 (RLS-scoped, single-use)
+              summary: rec.summaryText,
+              estimatedCostEur: centsToEur(rec.estimatedCostCents),
+              requiredApproverRoles: rec.requiredApproverRoles,
+              expiresAt: rec.expiresAt.toISOString(),
+            },
+          };
+        },
+
+        // Path 1 consume: validates, returns confirmationId for the dispatcher to settle.
+        consume: async ({ token, args, principal: p }) => {
+          const validated = await validateConfirmation(token, args, p);
+          if (validated.kind === 'error') return validated;
+          return { kind: 'ok', confirmationId: validated.conf.id };
+        },
+
+        settle: async (confirmationId, outcome) => {
+          await settleConfirmation(client, confirmationId, outcome);
+        },
+      };
+
+      // Build the base tools array first (Phase-3 tools + list_pending_confirmations).
+      // confirm_pending is pushed in a second step so its consume closure can reference
+      // the now-populated tools array without a forward-reference problem.
+      const tools: DispatcherTool[] = [
         createCheckDomainTool({ client: openproviderClient, tokenManager }),
         createListDomainsTool({ client: openproviderClient, tokenManager }),
         createGetDomainTool({ client: openproviderClient, tokenManager }),
         createListContactsTool({ client: openproviderClient, tokenManager }),
         createGetContactTool({ client: openproviderClient, tokenManager }),
+        createListPendingConfirmationsTool({ getClient: () => client }),
       ];
+
+      // Path 2: confirm_pending's consume — validates AND executes the original tool.
+      // Closes over `tools` (already populated above) via findTool().
+      const confirmPendingConsume = async (input: {
+        confirmationId: string;
+        args: unknown;
+        principal: Principal;
+      }): Promise<{ kind: 'error'; code: string } | { kind: 'ok'; result: unknown }> => {
+        const validated = await validateConfirmation(
+          input.confirmationId,
+          input.args,
+          input.principal,
+        );
+        if (validated.kind === 'error') return validated;
+        const { conf } = validated;
+
+        // Look up the original tool by stored tool_name (not caller-supplied).
+        const originalTool = tools.find((t) => t.name === conf.toolName);
+        if (!originalTool) {
+          return { kind: 'error', code: 'tool_not_found' };
+        }
+
+        // Execute the original tool's handler and settle.
+        try {
+          const result = await originalTool.handler(input.args, input.principal);
+          await settleConfirmation(client, conf.id, 'committed');
+          return { kind: 'ok', result };
+        } catch (err) {
+          await settleConfirmation(client, conf.id, 'released');
+          const code = (err as { code?: string }).code ?? 'upstream_error';
+          return { kind: 'error', code };
+        }
+      };
+
+      // Push confirm_pending after tools is already populated (closure is safe).
+      tools.push(createConfirmPendingTool({ consume: confirmPendingConsume }));
 
       const dispatch = createDispatcher({
         tools,
         audit: createPgAuditSink(client),
+        confirm,
       });
 
       return {
