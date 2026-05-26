@@ -11,6 +11,7 @@ import { createFakeJwks, type FakeJwks } from '../_helpers/fake-jwks.js';
 
 import { createMcpServer } from '../../../src/mcp/transport.js';
 import { createWorkOsVerifier } from '../../../src/auth/oauth/workos.js';
+import { createTenantResolver } from '../../../src/auth/tenant-resolver.js';
 import { createAwsKms } from '../../../src/secrets/aws-kms.js';
 import { createSecretsStore } from '../../../src/secrets/store.js';
 import { createDbSecretsRepo } from '../../../src/secrets/db-repo.js';
@@ -20,10 +21,15 @@ import { createCheckDomainTool } from '../../../src/tools/check-domain.js';
 import { createOpenproviderClient } from '../../../src/openprovider/client.js';
 import { createOpenproviderTokenManager } from '../../../src/openprovider/token-manager.js';
 import { createPgTokenCache } from '../../../src/openprovider/token-cache-pg.js';
+import { OpenproviderAccountNotConnected } from '../../../src/openprovider/errors.js';
 import type { Principal } from '../../../src/auth/principal.js';
 
 const TENANT_A = '00000000-0000-0000-0000-0000000000a1';
 const TENANT_B = '00000000-0000-0000-0000-0000000000b1';
+
+// oauth_subject values seeded into users rows for scenarios 1-2.
+const SUB_TENANT_A = 'sub_tenant_a';
+const SUB_TENANT_B = 'sub_tenant_b';
 
 describe('phase 2 end-to-end', () => {
   let pgFixture: PgFixture;
@@ -48,7 +54,10 @@ describe('phase 2 end-to-end', () => {
     // Seed two tenants, each with an Openprovider account row and encrypted password.
     const kms = createAwsKms({ region: 'eu-central-1', endpoint: kmsFixture.endpoint });
 
-    // Insert tenants and openprovider_accounts as superuser (bypasses RLS).
+    // Insert tenants, openprovider_accounts, and users as superuser (bypasses RLS).
+    // The users rows link each oauth_subject to the correct pre-seeded tenant so that
+    // resolve_or_provision_tenant returns TENANT_A/TENANT_B (not a fresh auto-provisioned tenant)
+    // when scenarios 1-2 tokens are verified.
     const seedClient = await pool.connect();
     try {
       await seedClient.query(
@@ -59,6 +68,13 @@ describe('phase 2 end-to-end', () => {
         `INSERT INTO openprovider_accounts (tenant_id, username)
          VALUES ($1, 'user-a'), ($2, 'user-b')`,
         [TENANT_A, TENANT_B],
+      );
+      // Seed users rows so resolve_or_provision_tenant finds the existing tenant.
+      await seedClient.query(
+        `INSERT INTO users (tenant_id, email, oauth_subject, role)
+         VALUES ($1, 'a@example.com', $3, 'owner'),
+                ($2, 'b@example.com', $4, 'owner')`,
+        [TENANT_A, TENANT_B, SUB_TENANT_A, SUB_TENANT_B],
       );
     } finally {
       seedClient.release();
@@ -99,14 +115,14 @@ describe('phase 2 end-to-end', () => {
             [tid],
           );
           const username = u.rows[0]?.username;
-          if (!username) throw new Error(`no openprovider account for ${tid}`);
+          if (!username) throw new OpenproviderAccountNotConnected();
           const store = createSecretsStore({
             kms,
             kmsKeyArn: kmsFixture.keyArn,
             repo: createDbSecretsRepo(client),
           });
           const passwordBuf = await store.get(tid, 'openprovider.password');
-          if (!passwordBuf) throw new Error(`no openprovider password for ${tid}`);
+          if (!passwordBuf) throw new OpenproviderAccountNotConnected();
           return { username, password: passwordBuf.toString('utf8') };
         }
 
@@ -173,6 +189,7 @@ describe('phase 2 end-to-end', () => {
         role: 'viewer',
       },
       verifier,
+      resolveTenant: createTenantResolver(pool),
       dispatchFactory,
     });
     await app.listen({ host: '127.0.0.1', port: 0 });
@@ -261,11 +278,8 @@ describe('phase 2 end-to-end', () => {
     mockOpenproviderLogin('jwt-a');
     mockCheckDomain('a.com');
 
-    const bearer = await jwks.mintToken({
-      sub: 'user_a',
-      scope: 'mcp:read',
-      'act.tnt': TENANT_A,
-    });
+    // Token uses sub that maps to TENANT_A via the seeded users row.
+    const bearer = await jwks.mintToken({ sub: SUB_TENANT_A, email: 'a@example.com' });
 
     const sid = await initializeSession(bearer);
     const body = (await callTool(sid, bearer, {
@@ -292,11 +306,8 @@ describe('phase 2 end-to-end', () => {
     mockOpenproviderLogin('jwt-b');
     mockCheckDomain('b.com');
 
-    const bearer = await jwks.mintToken({
-      sub: 'user_b',
-      scope: 'mcp:read',
-      'act.tnt': TENANT_B,
-    });
+    // Token uses sub that maps to TENANT_B via the seeded users row.
+    const bearer = await jwks.mintToken({ sub: SUB_TENANT_B, email: 'b@example.com' });
 
     const sid = await initializeSession(bearer);
     const body = (await callTool(sid, bearer, {
@@ -362,4 +373,74 @@ describe('phase 2 end-to-end', () => {
     });
     expect(r.status).toBe(401);
   }, 30_000);
+
+  it('scenario 5: real-shaped token auto-provisions a tenant; check_domain reports not-connected, then succeeds after onboard', async () => {
+    const kms = createAwsKms({ region: 'eu-central-1', endpoint: kmsFixture.endpoint });
+
+    // Mint a token with ONLY sub + email — no act.tnt, no mcp:* scopes.
+    const bearer = await jwks.mintToken({ sub: 'auto_user_1', email: 'auto1@example.com' });
+
+    // Initialize session — this triggers resolve_or_provision_tenant, creating the tenant.
+    const sid = await initializeSession(bearer);
+
+    // First call: tenant was auto-provisioned but has no Openprovider creds yet.
+    const notConnected = (await callTool(sid, bearer, {
+      domains: [{ name: 'auto', extension: 'com' }],
+      with_price: false,
+    })) as { error?: { message: string; data?: { code?: string } } };
+
+    // The transport surfaces the error as a JSON-RPC error with data.code.
+    expect(
+      notConnected.error?.data?.code === 'openprovider_not_connected' ||
+        (notConnected.error?.message ?? '').toLowerCase().includes('not connected') ||
+        JSON.stringify(notConnected).toLowerCase().includes('not_connected'),
+    ).toBe(true);
+
+    // Resolve the auto-provisioned tenant id using the SECURITY DEFINER fn.
+    const resolverClient = await pool.connect();
+    let tenantId: string;
+    try {
+      await resolverClient.query('SET ROLE app_role');
+      const r = await resolverClient.query<{ tenant_id: string }>(
+        'SELECT * FROM resolve_or_provision_tenant($1, $2)',
+        ['auto_user_1', 'auto1@example.com'],
+      );
+      tenantId = r.rows[0]!.tenant_id;
+    } finally {
+      resolverClient.release();
+    }
+
+    expect(tenantId).toBeTruthy();
+
+    // Onboard credentials the same way the CLI (tenant:onboard) does.
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO openprovider_accounts (tenant_id, username) VALUES ($1, 'auto-op-user')
+           ON CONFLICT (tenant_id) DO UPDATE SET username = EXCLUDED.username`,
+        [tenantId],
+      );
+      const store = createSecretsStore({
+        kms,
+        kmsKeyArn: kmsFixture.keyArn,
+        repo: createDbSecretsRepo(client),
+      });
+      await store.put(tenantId, 'openprovider.password', Buffer.from('auto-pw'));
+    });
+
+    // Mock Openprovider login + check for the second call.
+    mockOpenproviderLogin('jwt-auto');
+    mockCheckDomain('auto.com');
+
+    // New session so the token manager picks up the freshly onboarded creds.
+    const sid2 = await initializeSession(bearer);
+    const ok = (await callTool(sid2, bearer, {
+      domains: [{ name: 'auto', extension: 'com' }],
+      with_price: false,
+    })) as { result?: { content: { text: string }[] } };
+
+    const innerText = ok.result?.content[0]?.text;
+    expect(innerText).toBeDefined();
+    const inner = JSON.parse(innerText ?? '{}') as { results: { domain: string }[] };
+    expect(inner.results[0]?.domain).toBe('auto.com');
+  }, 90_000);
 });
