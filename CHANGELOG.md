@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0-phase4] — 2026-05-26
+
+### Added
+- Policy engine (`policies/engine`): per-tenant allow/deny/confirm with TLD allow+deny, role gate, and spend-cap evaluation.
+- Content-bound confirmation flow: propose mints a confirmation + pending spend reservation; consume verifies hash/expiry/approver-role, re-prices with a 5% drift guard, then executes.
+- Spend reservations with a lazy, worker-free accounting model: live spend computed from reservations (expired pending holds drop out via expires_at); SELECT … FOR UPDATE on the policy row serializes concurrent proposals (no overshoot — proven by a concurrency test).
+- `list_pending_confirmations` + `confirm_pending` meta-tools (approver handoff).
+- Default-on-provision policy (spend cap €0 = billable writes blocked until raised) seeded in resolve_or_provision_tenant; `policy:show` / `policy:set` CLI.
+- Pricing module: cents-based, 24h TLD cache, premium-domain bypass, EUR-only.
+- Migration 0008: policies, confirmations, spend_reservations (all RLS-scoped).
+
+### Changed
+- Dispatcher gained a confirm-mode branch (propose returns a confirmation token; consume executes the handler and settles the reservation).
+- All money math is integer cents internally.
+
+### Deferred
+- Real write tools (register_domain etc.) + idempotency records — Phase 5.
+- pg-boss workers (sweep / window rollup) — Phase 7/8.
+- day/week spend windows; dashboard policy editor — Phase 6.
+
 ## [0.4.0-phase3] — 2026-05-26
 
 ### Added

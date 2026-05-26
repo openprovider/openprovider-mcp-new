@@ -1,9 +1,10 @@
-# Openprovider MCP — Enterprise (v0.4 Phase 3: Real AuthKit auth + read tools)
+# Openprovider MCP — Enterprise (v0.5 Phase 4: Policy engine + confirmations + spend reservations)
 
-A multi-tenant SaaS MCP server for Openprovider. **Phase 3 completes real WorkOS AuthKit authentication** (tenant auto-provisioned on first login; each WorkOS user maps 1:1 to a tenant) **and ships the four read tools** (`list_domains`, `get_domain`, `list_contacts`, `get_contact`) end-to-end. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
+A multi-tenant SaaS MCP server for Openprovider. **Phase 4 ships the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting** — plus `list_pending_confirmations` / `confirm_pending` meta-tools and a default-on-provision policy (spend cap €0). Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
 
 ## Status
 
+- Phase 4 complete: `v0.5.0-phase4` tag.
 - Phase 3 complete: `v0.4.0-phase3` tag.
 - Phase 2 complete: `v0.2.0-phase2` tag.
 - Phase 1 (foundation) is preserved on the `v0.2.0-phase1` tag and the same `feat/enterprise-phase-1` branch.
@@ -16,6 +17,8 @@ A multi-tenant SaaS MCP server for Openprovider. **Phase 3 completes real WorkOS
 - **Phase 1 plan:** `docs/superpowers/plans/2026-05-21-enterprise-mcp-phase-1-foundation.md`
 - **Phase 2 plan:** `docs/superpowers/plans/2026-05-22-enterprise-mcp-phase-2-vertical-slice.md`
 - **Phase 3 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-3.md`
+- **Phase 4 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-4.md`
+- **Phase 4 spec:** `docs/superpowers/specs/2026-05-26-phase4-policy-confirmations-design.md`
 - **WorkOS dev project decision:** `docs/superpowers/decisions/2026-05-22-workos-dev-project.md` (created during Phase 2 Task 1)
 - **Legacy v0.1 server:** archived on the `legacy/v0.1` branch.
 
@@ -29,6 +32,55 @@ A multi-tenant SaaS MCP server for Openprovider. **Phase 3 completes real WorkOS
 | `get_domain` | **live** | fetches one domain by Openprovider domain id |
 | `list_contacts` | **live** | lists contacts in the tenant's Openprovider account |
 | `get_contact` | **live** | fetches one contact by Openprovider contact id |
+| `list_pending_confirmations` | **live** (meta) | lists confirmations the caller's role may approve |
+| `confirm_pending` | **live** (meta) | approves and executes a pending confirmation by id |
+
+## Spend controls & confirmations
+
+The default policy provisioned for every new tenant has a **spend cap of €0**, which means all billable write tools (e.g. `register_domain`, `update_domain`) are blocked until the cap is raised. Read tools and `check_domain` are always allowed.
+
+Billable tools that are configured as `confirm`-mode follow a two-step propose → confirm flow:
+
+1. Call the tool without a confirmation token → the server returns `confirmation_required` with a `confirmation_id` and a cost estimate.
+2. An approver (owner or admin role) calls `confirm_pending` with that `confirmation_id` to execute the operation.
+
+Pending confirmations expire after 5 minutes. The server re-prices at confirm time and rejects the request if the price has drifted more than 5%.
+
+### Managing policies
+
+Inspect the current policy for a tenant:
+
+```bash
+npm run policy:show -- --tenant <uuid>
+```
+
+Apply a new policy from a JSON file:
+
+```bash
+npm run policy:set -- --tenant <uuid> --file policy.json
+```
+
+A minimal policy that allows billable writes up to €100/month:
+
+```json
+{
+  "version": 1,
+  "spend_caps": { "window": "month", "limit_eur": 100 },
+  "tld_allowlist": [],
+  "tld_denylist": [],
+  "tools": {
+    "list_*": "allow",
+    "get_*": "allow",
+    "check_domain": "allow",
+    "register_domain": "confirm",
+    "update_domain": "confirm",
+    "delete_contact": "confirm",
+    "update_contact": "confirm",
+    "create_contact": "allow"
+  },
+  "ip_allowlist": []
+}
+```
 
 ## Authentication
 
