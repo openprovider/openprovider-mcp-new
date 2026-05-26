@@ -23,6 +23,7 @@
     "tenant:onboard": "tsx scripts/tenant-onboard.ts",
     "policy:show": "tsx scripts/policy.ts show",
     "policy:set": "tsx scripts/policy.ts set",
+    "audit:verify": "tsx scripts/audit-verify.ts",
     "prepare": "husky"
   },
   "dependencies": {
