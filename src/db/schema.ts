@@ -7,6 +7,7 @@ import {
   integer,
   bigserial,
   jsonb,
+  numeric,
 } from 'drizzle-orm/pg-core';
 
 export const tenants = pgTable('tenants', {
@@ -82,4 +83,44 @@ export const auditEvents = pgTable('audit_events', {
   errorCode: text('error_code'),
   traceId: text('trace_id'),
   spanId: text('span_id'),
+});
+
+export const policies = pgTable('policies', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id),
+  doc: jsonb('doc').notNull(),
+  version: integer('version').notNull().default(1),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedByUserId: uuid('updated_by_user_id'),
+});
+
+export const confirmations = pgTable('confirmations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  principalSubject: text('principal_subject').notNull(),
+  toolName: text('tool_name').notNull(),
+  argsHash: bytea('args_hash').notNull(),
+  argsJsonb: jsonb('args_jsonb').notNull(),
+  summaryText: text('summary_text').notNull(),
+  estimatedCostEur: numeric('estimated_cost_eur').notNull().default('0'),
+  requiredApproverRoles: text('required_approver_roles').array().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+});
+
+export const spendReservations = pgTable('spend_reservations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  confirmationId: uuid('confirmation_id').references(() => confirmations.id),
+  amountEur: numeric('amount_eur').notNull(),
+  status: text('status').notNull().default('pending'),
+  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  settledAt: timestamp('settled_at', { withTimezone: true }),
 });
