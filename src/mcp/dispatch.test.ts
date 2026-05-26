@@ -97,4 +97,32 @@ describe('mcp dispatch', () => {
     expect(audit.map((a) => a.eventType)).toEqual(['tool.call', 'tool.error']);
     expect(audit[1]).toMatchObject({ errorCode: 'openprovider_unavailable' });
   });
+
+  it('forwards openprovider_not_connected as the audit error code', async () => {
+    const audit: AuditRow[] = [];
+    const dispatch = createDispatcher({
+      audit: (row) => {
+        audit.push(row);
+        return Promise.resolve();
+      },
+      tools: [
+        {
+          name: 'check_domain',
+          description: 'x',
+          inputSchema: z.object({}),
+          handler: () =>
+            Promise.reject(
+              Object.assign(new Error('not connected'), { code: 'openprovider_not_connected' }),
+            ),
+        },
+      ],
+    });
+    await expect(dispatch({ name: 'check_domain', args: {}, principal })).rejects.toMatchObject({
+      code: 'openprovider_not_connected',
+    });
+    expect(audit.at(-1)).toMatchObject({
+      eventType: 'tool.error',
+      errorCode: 'openprovider_not_connected',
+    });
+  });
 });

@@ -29,3 +29,13 @@ export class OpenproviderClientError extends Error {
     this.name = 'OpenproviderClientError';
   }
 }
+
+export class OpenproviderAccountNotConnected extends Error {
+  readonly code = 'openprovider_not_connected';
+  constructor() {
+    super(
+      'No Openprovider account connected for this tenant. Run: openprovider-mcp tenant:onboard',
+    );
+    this.name = 'OpenproviderAccountNotConnected';
+  }
+}
