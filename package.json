@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
+    "tenant:onboard": "tsx scripts/tenant-onboard.ts",
     "prepare": "husky"
   },
   "dependencies": {
