@@ -6,14 +6,13 @@ import type { FastifyInstance } from 'fastify';
 import type { AddressInfo } from 'node:net';
 
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
-import { startLocalstackKms, type KmsFixture } from '../_helpers/localstack-kms.js';
 import { migratedDb, runAsTenant } from '../_helpers/db.js';
 import { createFakeJwks, type FakeJwks } from '../_helpers/fake-jwks.js';
 
 import { createMcpServer } from '../../../src/mcp/transport.js';
 import { createWorkOsVerifier } from '../../../src/auth/oauth/workos.js';
 import { createTenantResolver } from '../../../src/auth/tenant-resolver.js';
-import { createAwsKms } from '../../../src/secrets/aws-kms.js';
+import { createFakeKms } from '../../../src/secrets/fake-kms.js';
 import { createSecretsStore } from '../../../src/secrets/store.js';
 import { createDbSecretsRepo } from '../../../src/secrets/db-repo.js';
 import {
@@ -74,7 +73,6 @@ const SUB_TENANT_B = 'sub_tenant_b';
 
 describe('phase 2 end-to-end', () => {
   let pgFixture: PgFixture;
-  let kmsFixture: KmsFixture;
   let pool: pg.Pool;
   let jwks: FakeJwks;
   let app: FastifyInstance;
@@ -82,18 +80,14 @@ describe('phase 2 end-to-end', () => {
 
   beforeAll(async () => {
     // Boot infra in parallel.
-    [pgFixture, kmsFixture, jwks] = await Promise.all([
-      startPostgres(),
-      startLocalstackKms(),
-      createFakeJwks(),
-    ]);
+    [pgFixture, jwks] = await Promise.all([startPostgres(), createFakeJwks()]);
     jwks.install();
 
     const m = await migratedDb(pgFixture.url);
     pool = m.pool;
 
     // Seed two tenants, each with an Openprovider account row and encrypted password.
-    const kms = createAwsKms({ region: 'eu-central-1', endpoint: kmsFixture.endpoint });
+    const kms = createFakeKms();
 
     // Insert tenants, openprovider_accounts, and users as superuser (bypasses RLS).
     // The users rows link each oauth_subject to the correct pre-seeded tenant so that
@@ -126,7 +120,7 @@ describe('phase 2 end-to-end', () => {
       await runAsTenant(pool, t, async (client) => {
         const store = createSecretsStore({
           kms,
-          kmsKeyArn: kmsFixture.keyArn,
+          kmsKeyArn: 'fake-key',
           repo: createDbSecretsRepo(client),
         });
         await store.put(t, 'openprovider.password', Buffer.from(`pw-${t.slice(-1)}`));
@@ -159,7 +153,7 @@ describe('phase 2 end-to-end', () => {
           if (!username) throw new OpenproviderAccountNotConnected();
           const store = createSecretsStore({
             kms,
-            kmsKeyArn: kmsFixture.keyArn,
+            kmsKeyArn: 'fake-key',
             repo: createDbSecretsRepo(client),
           });
           const passwordBuf = await store.get(tid, 'openprovider.password');
@@ -242,7 +236,6 @@ describe('phase 2 end-to-end', () => {
     if (app) await app.close();
     if (pool) await pool.end();
     if (pgFixture) await pgFixture.stop();
-    if (kmsFixture) await kmsFixture.stop();
     nock.cleanAll();
   });
 
@@ -416,7 +409,7 @@ describe('phase 2 end-to-end', () => {
   }, 30_000);
 
   it('scenario 5: real-shaped token auto-provisions a tenant; check_domain reports not-connected, then succeeds after onboard', async () => {
-    const kms = createAwsKms({ region: 'eu-central-1', endpoint: kmsFixture.endpoint });
+    const kms = createFakeKms();
 
     // Mint a token with ONLY sub + email — no act.tnt, no mcp:* scopes.
     const bearer = await jwks.mintToken({ sub: 'auto_user_1', email: 'auto1@example.com' });
@@ -462,7 +455,7 @@ describe('phase 2 end-to-end', () => {
       );
       const store = createSecretsStore({
         kms,
-        kmsKeyArn: kmsFixture.keyArn,
+        kmsKeyArn: 'fake-key',
         repo: createDbSecretsRepo(client),
       });
       await store.put(tenantId, 'openprovider.password', Buffer.from('auto-pw'));
@@ -971,7 +964,7 @@ describe('phase 2 end-to-end', () => {
             principal.tenantId,
           ]);
 
-          const kmsLocal = createAwsKms({ region: 'eu-central-1', endpoint: kmsFixture.endpoint });
+          const kmsLocal = createFakeKms();
 
           async function fetchCredentials(
             tid: string,
@@ -984,7 +977,7 @@ describe('phase 2 end-to-end', () => {
             if (!username) throw new OpenproviderAccountNotConnected();
             const store = createSecretsStore({
               kms: kmsLocal,
-              kmsKeyArn: kmsFixture.keyArn,
+              kmsKeyArn: 'fake-key',
               repo: createDbSecretsRepo(client),
             });
             const passwordBuf = await store.get(tid, 'openprovider.password');
@@ -1340,7 +1333,7 @@ describe('phase 2 end-to-end', () => {
       }
 
       // Seed Openprovider account row + encrypted password (mirrors scenario 5 onboarding).
-      const kmsLocal = createAwsKms({ region: 'eu-central-1', endpoint: kmsFixture.endpoint });
+      const kmsLocal = createFakeKms();
       await runAsTenant(pool, tenantId, async (c) => {
         await c.query(
           `INSERT INTO openprovider_accounts (tenant_id, username) VALUES ($1, 'op-user-${sub}')
@@ -1349,7 +1342,7 @@ describe('phase 2 end-to-end', () => {
         );
         const store = createSecretsStore({
           kms: kmsLocal,
-          kmsKeyArn: kmsFixture.keyArn,
+          kmsKeyArn: 'fake-key',
           repo: createDbSecretsRepo(c),
         });
         await store.put(tenantId, 'openprovider.password', Buffer.from(`pw-${sub}`));

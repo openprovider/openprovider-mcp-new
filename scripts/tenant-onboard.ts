@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { parseArgs } from 'node:util';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db/client.js';
-import { createAwsKms } from '../src/secrets/aws-kms.js';
+import { createGcpKms } from '../src/secrets/gcp-kms.js';
 import { createSecretsStore } from '../src/secrets/store.js';
 import { createDbSecretsRepo } from '../src/secrets/db-repo.js';
 
@@ -24,10 +24,7 @@ async function main(): Promise<void> {
   }
   const cfg = loadConfig();
   const { pool } = createDb({ connectionString: cfg.databaseUrl });
-  const kms = createAwsKms({
-    region: cfg.awsRegion,
-    ...(cfg.awsEndpoint ? { endpoint: cfg.awsEndpoint } : {}),
-  });
+  const kms = createGcpKms({ keyName: cfg.gcpKmsKeyName });
 
   const client = await pool.connect();
   try {
@@ -44,7 +41,7 @@ async function main(): Promise<void> {
 
     const store = createSecretsStore({
       kms,
-      kmsKeyArn: cfg.kmsKeyArn,
+      kmsKeyArn: cfg.gcpKmsKeyName,
       repo: createDbSecretsRepo(client),
     });
     await store.put(values.tenant, 'openprovider.password', Buffer.from(values.password, 'utf8'));

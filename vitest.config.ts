@@ -12,7 +12,6 @@ export default defineConfig({
         'src/**/index.ts',
         // Infrastructure files covered by integration tests, not unit tests:
         'src/db/**',
-        'src/secrets/aws-kms.ts',
         'src/secrets/db-repo.ts',
         'src/server.ts',
         'src/openprovider/types.ts',

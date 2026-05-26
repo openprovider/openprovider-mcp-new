@@ -4,7 +4,7 @@ import { createMcpServer } from './mcp/transport.js';
 import { startOtel } from './observability/otel.js';
 import { createLogger } from './observability/logger.js';
 import { createDb } from './db/client.js';
-import { createAwsKms } from './secrets/aws-kms.js';
+import { createGcpKms } from './secrets/gcp-kms.js';
 import { createWorkOsVerifier } from './auth/oauth/workos.js';
 import type { Principal } from './auth/principal.js';
 import { createDispatcher, type ConfirmDeps, type DispatcherTool } from './mcp/dispatch.js';
@@ -58,10 +58,7 @@ async function main(): Promise<void> {
 
   const { pool } = createDb({ connectionString: cfg.databaseUrl });
   const resolveTenant = createTenantResolver(pool);
-  const kms = createAwsKms({
-    region: cfg.awsRegion,
-    ...(cfg.awsEndpoint ? { endpoint: cfg.awsEndpoint } : {}),
-  });
+  const kms = createGcpKms({ keyName: cfg.gcpKmsKeyName });
 
   const verifier = createWorkOsVerifier({
     clientId: cfg.workosClientId,
@@ -110,7 +107,7 @@ async function main(): Promise<void> {
         if (!username) throw new OpenproviderAccountNotConnected();
         const store = createSecretsStore({
           kms,
-          kmsKeyArn: cfg.kmsKeyArn,
+          kmsKeyArn: cfg.gcpKmsKeyName,
           repo: createDbSecretsRepo(client),
         });
         const passwordBuf = await store.get(tenantId, 'openprovider.password');
@@ -407,7 +404,7 @@ async function main(): Promise<void> {
       {
         name: 'kms',
         check: async () => {
-          await kms.generateDataKey(cfg.kmsKeyArn);
+          await kms.generateDataKey(cfg.gcpKmsKeyName);
           return true;
         },
       },

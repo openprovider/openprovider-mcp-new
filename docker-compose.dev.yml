@@ -12,14 +12,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-  localstack:
-    image: localstack/localstack:3.7
-    environment:
-      SERVICES: kms
-      DEFAULT_REGION: eu-central-1
-    ports: ['4566:4566']
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.49
+    command: ['-scheme', 'http', '-port', '4443']
+    ports: ['4443:4443']
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4566/_localstack/health']
+      test: ['CMD', 'curl', '-f', 'http://localhost:4443/storage/v1/b']
       interval: 5s
       timeout: 5s
       retries: 10
