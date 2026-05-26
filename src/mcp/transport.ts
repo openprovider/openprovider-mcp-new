@@ -11,6 +11,13 @@ import type { TenantResolver } from '../auth/tenant-resolver.js';
 import { withRequestContext } from '../observability/request-context.js';
 import { randomUUID } from 'node:crypto';
 
+// Module augmentation so req.principal is typed throughout the request lifecycle.
+declare module 'fastify' {
+  interface FastifyRequest {
+    principal?: Principal;
+  }
+}
+
 export interface DispatchFactory {
   (principal: Principal): Promise<{
     dispatch: (input: { name: string; args: unknown; principal: Principal }) => Promise<unknown>;
@@ -43,21 +50,37 @@ export interface McpServerConfig {
 export async function createMcpServer(config: McpServerConfig): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
-  await app.register(rateLimit, {
-    global: false,
-    max: 60,
-    timeWindow: '1 minute',
-    keyGenerator: (req) => {
-      const auth = req.headers.authorization;
-      return auth ? auth.slice(0, 128) : `anon:${req.ip}`;
-    },
-  });
-
   const resolve = createIdentityResolver({
     devToken: config.devToken,
     devPrincipal: config.devPrincipal,
     ...(config.verifier !== undefined ? { verifier: config.verifier } : {}),
     ...(config.resolveTenant !== undefined ? { resolveTenant: config.resolveTenant } : {}),
+  });
+
+  // Auth hook must run BEFORE the rate-limit plugin registers its own onRequest hook,
+  // so that req.principal is set by the time the limiter's keyGenerator runs.
+  app.addHook('onRequest', async (req, reply) => {
+    // Only guard /mcp routes; health + discovery endpoints are public.
+    if (!req.url.startsWith('/mcp')) return;
+    let principal: Principal | null = null;
+    try {
+      principal = await resolve(req.headers.authorization);
+    } catch {
+      // API-key-not-implemented path throws; treat as 401 for now.
+      principal = null;
+    }
+    if (!principal) {
+      await reply.code(401).send({ error: 'unauthenticated' });
+      return reply;
+    }
+    req.principal = principal;
+  });
+
+  await app.register(rateLimit, {
+    global: false,
+    max: 60,
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.principal?.subject ?? `anon:${req.ip}`,
   });
 
   app.get('/healthz', () => Promise.resolve({ ok: true }));
@@ -96,11 +119,8 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     '/mcp',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (req, reply) => {
-      const principal = await resolve(req.headers.authorization);
-      if (!principal) {
-        void reply.code(401).send({ error: 'unauthenticated' });
-        return;
-      }
+      // req.principal is guaranteed by the onRequest hook (which already sent 401 if missing).
+      const principal = req.principal!;
 
       // ---------------------------------------------------------------------------
       // Fast-path: intercept tools/call before the SDK transport when a
@@ -203,11 +223,9 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     '/mcp',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (req, reply) => {
-      const principal = await resolve(req.headers.authorization);
-      if (!principal) {
-        void reply.code(401).send({ error: 'unauthenticated' });
-        return;
-      }
+      // req.principal is guaranteed by the onRequest hook (which already sent 401 if missing).
+      // The GET /mcp handler is the SSE stream endpoint; the principal is not used directly here
+      // but is verified to exist by the hook before this handler runs.
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
       if (!sessionId) {
         void reply.code(400).send({ error: 'mcp-session-id required for SSE' });
