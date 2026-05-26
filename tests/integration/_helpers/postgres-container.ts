@@ -11,6 +11,7 @@ export async function startPostgres(): Promise<PgFixture> {
     .withDatabase('openprovider_mcp')
     .withUsername('openprovider')
     .withPassword('test')
+    .withStartupTimeout(120_000)
     .start();
   const url = container.getConnectionUri();
   return {

@@ -8,9 +8,9 @@ export interface KmsFixture {
 }
 
 export async function startLocalstackKms(): Promise<KmsFixture> {
-  const c: StartedLocalStackContainer = await new LocalstackContainer(
-    'localstack/localstack:3.7',
-  ).start();
+  const c: StartedLocalStackContainer = await new LocalstackContainer('localstack/localstack:3.7')
+    .withStartupTimeout(120_000)
+    .start();
   const endpoint = c.getConnectionUri();
   const client = new KMSClient({
     region: 'eu-central-1',
