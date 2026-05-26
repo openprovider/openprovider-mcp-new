@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createDispatcher, DispatchError, type AuditRow } from './dispatch.js';
 import type { Principal } from '../auth/principal.js';
@@ -124,5 +124,121 @@ describe('mcp dispatch', () => {
       eventType: 'tool.error',
       errorCode: 'openprovider_not_connected',
     });
+  });
+
+  // ── Confirm-mode branch tests ──────────────────────────────────────────────
+
+  it('confirm-mode tool without token returns confirmation_required (proposed)', async () => {
+    const audit: AuditRow[] = [];
+    const dispatch = createDispatcher({
+      audit: (r) => {
+        audit.push(r);
+        return Promise.resolve();
+      },
+      tools: [
+        {
+          name: 'reg',
+          description: 'x',
+          inputSchema: z.object({ d: z.string() }),
+          handler: () => Promise.resolve({ ran: true }),
+        },
+      ],
+      confirm: {
+        resolveMode: () => Promise.resolve('confirm'),
+        propose: () =>
+          Promise.resolve({
+            kind: 'proposed',
+            result: {
+              confirmationId: 'cf1',
+              confirmationToken: 'ct1',
+              summary: 's',
+              estimatedCostEur: 12.99,
+              requiredApproverRoles: ['owner'],
+              expiresAt: new Date().toISOString(),
+            },
+          }),
+        consume: () => Promise.resolve({ kind: 'ok', confirmationId: 'cf1' }),
+        settle: () => Promise.resolve(),
+      },
+    });
+    const r = (await dispatch({ name: 'reg', args: { d: 'a.com' }, principal })) as {
+      confirmationToken?: string;
+      ran?: boolean;
+    };
+    expect(r.confirmationToken).toBe('ct1');
+    expect(r.ran).toBeUndefined(); // handler NOT executed on propose
+  });
+
+  it('confirm-mode tool with token executes the handler after consume', async () => {
+    const dispatch = createDispatcher({
+      audit: () => Promise.resolve(),
+      tools: [
+        {
+          name: 'reg',
+          description: 'x',
+          inputSchema: z.object({ d: z.string() }),
+          handler: () => Promise.resolve({ ran: true }),
+        },
+      ],
+      confirm: {
+        resolveMode: () => Promise.resolve('confirm'),
+        propose: () => Promise.resolve({ kind: 'denied', reason: 'should not be called' }),
+        consume: () => Promise.resolve({ kind: 'ok', confirmationId: 'cf1' }),
+        settle: () => Promise.resolve(),
+      },
+    });
+    const r = (await dispatch({
+      name: 'reg',
+      args: { d: 'a.com' },
+      principal,
+      confirm: { token: 'ct1' },
+    })) as { ran?: boolean };
+    expect(r.ran).toBe(true);
+  });
+
+  it('policy_denied propose throws structured error', async () => {
+    const dispatch = createDispatcher({
+      audit: () => Promise.resolve(),
+      tools: [
+        {
+          name: 'reg',
+          description: 'x',
+          inputSchema: z.object({ d: z.string() }),
+          handler: () => Promise.resolve({}),
+        },
+      ],
+      confirm: {
+        resolveMode: () => Promise.resolve('confirm'),
+        propose: () => Promise.resolve({ kind: 'denied', reason: 'spend_cap_exceeded' }),
+        consume: () => Promise.resolve({ kind: 'ok', confirmationId: 'cf1' }),
+        settle: () => Promise.resolve(),
+      },
+    });
+    await expect(dispatch({ name: 'reg', args: { d: 'a.com' }, principal })).rejects.toMatchObject({
+      code: 'policy_denied',
+    });
+  });
+
+  it('settle is called with committed after successful consume+execute', async () => {
+    const settle = vi.fn(() => Promise.resolve());
+    const dispatch = createDispatcher({
+      audit: () => Promise.resolve(),
+      tools: [
+        {
+          name: 'reg',
+          description: 'x',
+          inputSchema: z.object({ d: z.string() }),
+          handler: () => Promise.resolve({ ran: true }),
+        },
+      ],
+      confirm: {
+        resolveMode: () => Promise.resolve('confirm'),
+        propose: () => Promise.resolve({ kind: 'denied', reason: 'should not be called' }),
+        consume: () => Promise.resolve({ kind: 'ok', confirmationId: 'cf1' }),
+        settle,
+      },
+    });
+    await dispatch({ name: 'reg', args: { d: 'a.com' }, principal, confirm: { token: 'ct1' } });
+    expect(settle).toHaveBeenCalledWith('cf1', 'committed');
   });
 });
