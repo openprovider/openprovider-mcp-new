@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.0-phase7] — 2026-05-26
+
+### Added
+- Tamper-evident per-tenant audit hash chain: prev_hash/row_hash on audit_events, maintained by an advisory-lock-serialized BEFORE INSERT trigger (genesis-safe).
+- `audit:verify` CLI — recomputes the chain (hashing the DB's own ::text rendering to avoid serialization drift) and detects tampering even when the append-only grant is bypassed by an elevated role.
+- `audit:seal` CLI — flushes sealed periods to GCS as gzip + sha256 manifest, watermark-idempotent, writes audit_archives pointers.
+- GCS object store (`@google-cloud/storage`); seal targets a bucket with a locked retention policy.
+
+### Changed
+- **Migrated KMS from AWS to GCP** (single-cloud GCP). New `gcp-kms.ts` (client-side DEK + KMS wrap via the existing Kms interface). AWS removed entirely: deleted aws-kms.ts + LocalStack helper, dropped @aws-sdk/client-kms.
+- Integration KMS now uses the in-process fake adapter; real GCP KMS fidelity is in an opt-in GCP_LIVE suite. LocalStack replaced by fake-gcs-server.
+- Config: GCP_PROJECT_ID / GCP_KMS_KEY_NAME / GCS_BUCKET replace the AWS_* vars.
+
+### Deferred
+- Monthly partitioning of audit_events (Phase 8 if volume warrants).
+- pg-boss always-on workers / scheduled sealing (Phase 8) — audit:seal is cron-triggerable.
+- Dashboard (Phase 6).
+
 ## [0.6.0-phase5] — 2026-05-26
 
 ### Added

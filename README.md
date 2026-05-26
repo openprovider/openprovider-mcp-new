@@ -1,9 +1,10 @@
-# Openprovider MCP — Enterprise (v0.6 Phase 5: Write tools + approver workflow + idempotency)
+# Openprovider MCP — Enterprise (v0.7.0 Phase 7: GCP KMS migration + audit hash chain + GCS sealing)
 
-A multi-tenant SaaS MCP server for Openprovider. **Phase 5 ships the five write tools (`register_domain`, `update_domain`, `create_contact`, `update_contact`, `delete_contact`) on Phase 4's confirmation machinery**, with strict zod argument validation, atomic claim-before-execute for confirm-mode billable/destructive ops, and idempotent `create_contact` via a local `idempotency_records` table. Phase 4 shipped the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting. Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
+A multi-tenant SaaS MCP server for Openprovider. **Phase 7 migrates secrets/KMS from AWS KMS to GCP KMS (single-cloud) and adds a tamper-evident per-tenant audit hash chain** with a `verify-chain` CLI and an `audit:seal` CLI that flushes sealed archives to GCS under a locked retention policy. Phase 5 shipped the five write tools (`register_domain`, `update_domain`, `create_contact`, `update_contact`, `delete_contact`) on Phase 4's confirmation machinery. Phase 4 shipped the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting. Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
 
 ## Status
 
+- Phase 7 complete: `v0.7.0-phase7` tag.
 - Phase 5 complete: `v0.6.0-phase5` tag.
 - Phase 4 complete: `v0.5.0-phase4` tag.
 - Phase 3 complete: `v0.4.0-phase3` tag.
@@ -15,6 +16,7 @@ A multi-tenant SaaS MCP server for Openprovider. **Phase 5 ships the five write 
 - **Spec:** `docs/superpowers/specs/2026-05-21-enterprise-mcp-design.md`
 - **Phase 3 auth spec:** `docs/superpowers/specs/2026-05-26-phase3-auth-tenant-mapping-design.md`
 - **Phase 5 spec:** `docs/superpowers/specs/2026-05-26-phase5-write-tools-design.md`
+- **Phase 7 spec:** `docs/superpowers/specs/2026-05-26-phase7-gcp-and-audit-chain-design.md`
 - **Phase roadmap:** `docs/superpowers/plans/2026-05-21-enterprise-mcp-roadmap.md`
 - **Phase 1 plan:** `docs/superpowers/plans/2026-05-21-enterprise-mcp-phase-1-foundation.md`
 - **Phase 2 plan:** `docs/superpowers/plans/2026-05-22-enterprise-mcp-phase-2-vertical-slice.md`
@@ -22,6 +24,7 @@ A multi-tenant SaaS MCP server for Openprovider. **Phase 5 ships the five write 
 - **Phase 4 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-4.md`
 - **Phase 4 spec:** `docs/superpowers/specs/2026-05-26-phase4-policy-confirmations-design.md`
 - **Phase 5 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-5.md`
+- **Phase 7 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-7.md`
 - **WorkOS dev project decision:** `docs/superpowers/decisions/2026-05-22-workos-dev-project.md` (created during Phase 2 Task 1)
 - **Legacy v0.1 server:** archived on the `legacy/v0.1` branch.
 
@@ -127,6 +130,41 @@ npm run db:migrate
 npm run dev
 ```
 
+### GCP environment variables
+
+Phase 7 uses GCP as the sole cloud provider (AWS has been removed). Set these in `.env`:
+
+| Variable | Description |
+|---|---|
+| `GCP_PROJECT_ID` | GCP project that owns the KMS key ring and GCS bucket |
+| `GCP_KMS_KEY_NAME` | Full resource name: `projects/<proj>/locations/<loc>/keyRings/<ring>/cryptoKeys/<key>` |
+| `GCS_BUCKET` | GCS bucket for sealed audit archives (must have a **locked retention policy**) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to a service-account JSON key (omit when using Workload Identity / ADC) |
+
+For local development, `fake-gcs-server` replaces LocalStack. The `docker-compose.dev.yml` starts it on port `4443`. Set `STORAGE_EMULATOR_HOST=http://localhost:4443` to point the GCS client at the local emulator.
+
+### Audit commands
+
+```bash
+# Verify the per-tenant audit hash chain (detects tampering even by elevated DB roles)
+npm run audit:verify -- --tenant <uuid>
+
+# Seal a period's audit events to GCS as a gzip + sha256 manifest archive
+npm run audit:seal -- --before <YYYY-MM-DD> --tenant <uuid>
+```
+
+### Audit integrity
+
+Every row inserted into `audit_events` is chained by a `BEFORE INSERT` trigger:
+
+- `prev_hash` — the `row_hash` of the previous row for this tenant (32 zero bytes for the genesis row).
+- `row_hash` — `SHA-256(prev_hash || UTF8(canonical_fields))`, where the canonical string joins 15 fields with `|` using the DB's own `::text` rendering (no JS reformatting — zero serialization drift).
+- The trigger acquires a per-tenant advisory lock so concurrent inserts produce a linear chain.
+
+`audit:verify` re-reads every row (fetching all hashed fields as `::text`) and recomputes the chain in TypeScript. A mismatch — even one caused by an elevated role that bypasses the append-only `app_role` grant — is reported as `audit.chain.broken`.
+
+`audit:seal` flushes rows for a tenant/period to GCS as a `.ndjson.gz` file and records the archive pointer (including `last_row_hash`) in `audit_archives`. Re-sealing the same period is a no-op (watermark-idempotent). The GCS bucket's locked retention policy prevents premature deletion of sealed archives.
+
 ### Hitting the MCP endpoint
 
 `/mcp` requires either a dev bearer (`DEV_BEARER_TOKEN`) or a real WorkOS AuthKit access token. The token is verified, and the user's tenant is resolved (or provisioned) automatically.
@@ -150,7 +188,7 @@ curl http://localhost:3000/.well-known/oauth-protected-resource
 
 ```bash
 npm test                  # unit, coverage gates
-npm run test:integration  # Postgres + LocalStack KMS via testcontainers + e2e
+npm run test:integration  # Postgres + fake-gcs-server via testcontainers + e2e
 npm run lint
 npm run typecheck
 ```
