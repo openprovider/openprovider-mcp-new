@@ -101,3 +101,51 @@ describe('openprovider client — check_domain', () => {
     ).rejects.toThrow(/at least 1|too small|too_small/i);
   });
 });
+
+describe('openprovider client — read endpoints', () => {
+  afterEach(() => nock.cleanAll());
+
+  it('listDomains GETs /domains with query params and unwraps data', async () => {
+    nock('https://api.openprovider.eu')
+      .get('/v1beta/domains')
+      .query({ limit: '100', offset: '0' })
+      .reply(200, { data: { results: [{ id: 1, domain: 'a.com' }] } });
+    const client = createOpenproviderClient();
+    const r = (await client.listDomains('tok', { limit: 100, offset: 0 })) as {
+      results: unknown[];
+    };
+    expect(r.results).toHaveLength(1);
+  });
+
+  it('getDomain GETs /domains/:id and unwraps data', async () => {
+    nock('https://api.openprovider.eu')
+      .get('/v1beta/domains/42')
+      .reply(200, { data: { id: 42, domain: 'b.com' } });
+    const client = createOpenproviderClient();
+    const r = (await client.getDomain('tok', 42)) as { id: number };
+    expect(r.id).toBe(42);
+  });
+
+  it('listContacts and getContact hit the contacts endpoints', async () => {
+    nock('https://api.openprovider.eu')
+      .get('/v1beta/contacts')
+      .query({ limit: '50', offset: '0' })
+      .reply(200, { data: { results: [] } });
+    nock('https://api.openprovider.eu')
+      .get('/v1beta/contacts/7')
+      .reply(200, { data: { id: 7 } });
+    const client = createOpenproviderClient();
+    expect(
+      (await client.listContacts('tok', { limit: 50, offset: 0 })) as { results: unknown[] },
+    ).toBeTruthy();
+    expect((await client.getContact('tok', 7)) as { id: number }).toMatchObject({ id: 7 });
+  });
+
+  it('getDomain maps 4xx to OpenproviderClientError', async () => {
+    nock('https://api.openprovider.eu')
+      .get('/v1beta/domains/999')
+      .reply(404, { error: 'not found' });
+    const client = createOpenproviderClient();
+    await expect(client.getDomain('tok', 999)).rejects.toBeInstanceOf(OpenproviderClientError);
+  });
+});

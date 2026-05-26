@@ -15,7 +15,13 @@ const principal: Principal = {
 describe('check_domain tool', () => {
   it('fetches token then calls client.checkDomain', async () => {
     const fakeResult: CheckDomainResult = { results: [{ domain: 'example.com', status: 'free' }] };
-    const client = { checkDomain: vi.fn().mockResolvedValue(fakeResult) };
+    const client = {
+      checkDomain: vi.fn().mockResolvedValue(fakeResult),
+      listDomains: vi.fn(),
+      getDomain: vi.fn(),
+      listContacts: vi.fn(),
+      getContact: vi.fn(),
+    };
     const tokenManager = {
       getToken: vi.fn().mockResolvedValue('jwt'),
       invalidate: vi.fn().mockResolvedValue(undefined),
@@ -40,6 +46,10 @@ describe('check_domain tool', () => {
       checkDomain: vi
         .fn()
         .mockRejectedValue(Object.assign(new Error('boom'), { code: 'openprovider_unavailable' })),
+      listDomains: vi.fn(),
+      getDomain: vi.fn(),
+      listContacts: vi.fn(),
+      getContact: vi.fn(),
     };
     const tokenManager = {
       getToken: vi.fn().mockResolvedValue('jwt'),

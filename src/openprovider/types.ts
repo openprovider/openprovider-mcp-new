@@ -34,3 +34,28 @@ export const CheckDomainResult = z.object({
   ),
 });
 export type CheckDomainResult = z.infer<typeof CheckDomainResult>;
+
+export const ListDomainsArgs = z.object({
+  limit: z.number().int().min(1).max(500).default(100),
+  offset: z.number().int().min(0).default(0),
+  status: z.string().optional(),
+});
+export type ListDomainsArgs = z.infer<typeof ListDomainsArgs>;
+
+export const GetDomainArgs = z.object({ id: z.number().int().positive() });
+export type GetDomainArgs = z.infer<typeof GetDomainArgs>;
+
+export const ListContactsArgs = z.object({
+  limit: z.number().int().min(1).max(500).default(100),
+  offset: z.number().int().min(0).default(0),
+});
+export type ListContactsArgs = z.infer<typeof ListContactsArgs>;
+
+export const GetContactArgs = z.object({ id: z.number().int().positive() });
+export type GetContactArgs = z.infer<typeof GetContactArgs>;
+
+// Openprovider list/get responses wrap the payload in { data: ... }; we pass the
+// inner `data` through as unknown-shaped JSON. The MCP client gets the raw shape;
+// strict per-field schemas are deferred until Openprovider publishes an OpenAPI doc.
+export const PassthroughResult = z.unknown();
+export type PassthroughResult = unknown;

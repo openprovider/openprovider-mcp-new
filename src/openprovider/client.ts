@@ -5,7 +5,7 @@ import {
   OpenproviderUnavailableError,
   OpenproviderClientError,
 } from './errors.js';
-import { CheckDomainArgs, CheckDomainResult } from './types.js';
+import { CheckDomainArgs, CheckDomainResult, ListDomainsArgs, ListContactsArgs } from './types.js';
 
 export interface OpenproviderClientConfig {
   baseUrl?: string;
@@ -20,6 +20,10 @@ export interface OpenproviderClientConfig {
 
 export interface OpenproviderClient {
   checkDomain(token: string, args: CheckDomainArgs): Promise<CheckDomainResult>;
+  listDomains(token: string, args: ListDomainsArgs): Promise<unknown>;
+  getDomain(token: string, id: number): Promise<unknown>;
+  listContacts(token: string, args: ListContactsArgs): Promise<unknown>;
+  getContact(token: string, id: number): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -83,6 +87,15 @@ export function createOpenproviderClient(
     return attempt(0);
   }
 
+  function toQuery(params: Record<string, unknown>): string {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) sp.set(k, String(v));
+    }
+    const s = sp.toString();
+    return s ? `?${s}` : '';
+  }
+
   const checkDomainBreaker = new CircuitBreaker(
     async (token: string, args: CheckDomainArgs) => request('POST', '/domains/check', token, args),
     {
@@ -93,6 +106,24 @@ export function createOpenproviderClient(
     },
   );
   return {
+    async listDomains(token, args) {
+      const a = ListDomainsArgs.parse(args);
+      const body = await request('GET', `/domains${toQuery(a)}`, token);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async getDomain(token, id) {
+      const body = await request('GET', `/domains/${id}`, token);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async listContacts(token, args) {
+      const a = ListContactsArgs.parse(args);
+      const body = await request('GET', `/contacts${toQuery(a)}`, token);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async getContact(token, id) {
+      const body = await request('GET', `/contacts/${id}`, token);
+      return (body as { data?: unknown }).data ?? body;
+    },
     async checkDomain(token, args) {
       const parsedArgs = CheckDomainArgs.parse(args);
       let body: unknown;
