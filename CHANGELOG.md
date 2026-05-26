@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0-phase5] — 2026-05-26
+
+### Added
+- Write tools: `register_domain`, `update_domain` (confirm-mode, billable), `create_contact` (allow-mode), `update_contact` + `delete_contact` (confirm-mode).
+- Strict zod arg schemas for writes; the legacy silent mutation (India phone area-code splitting, role/is_active defaulting, auto-username) is gone — malformed input is rejected.
+- `idempotency_records` table (migration 0009) + `withIdempotency` replay for allow-mode `create_contact` (10-min window, auto-hash key).
+- Claim-before-execute for confirm-mode writes: atomic `UPDATE confirmations SET consumed_at WHERE consumed_at IS NULL RETURNING` gates execution, preventing concurrent double-execution of billable/destructive ops; failure un-claims for re-approval.
+- Optional `X-Idempotency-Key` header sent upstream best-effort.
+- Opt-in live-sandbox contact round-trip test (non-billable; env-gated). `register_domain` is never executed against the live sandbox.
+
+### Changed
+- Write tools ride Phase 4's data-driven policy modes — no new dispatcher branch.
+
+### Deferred
+- Dashboard + API keys (Phase 6); pg-boss workers (Phase 7); domain transfer/trade/renew/restore/authcode, SSL/DNS/etc. (future).
+
 ## [0.5.0-phase4] — 2026-05-26
 
 ### Added

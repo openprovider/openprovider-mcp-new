@@ -1,9 +1,10 @@
-# Openprovider MCP — Enterprise (v0.5 Phase 4: Policy engine + confirmations + spend reservations)
+# Openprovider MCP — Enterprise (v0.6 Phase 5: Write tools + approver workflow + idempotency)
 
-A multi-tenant SaaS MCP server for Openprovider. **Phase 4 ships the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting** — plus `list_pending_confirmations` / `confirm_pending` meta-tools and a default-on-provision policy (spend cap €0). Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
+A multi-tenant SaaS MCP server for Openprovider. **Phase 5 ships the five write tools (`register_domain`, `update_domain`, `create_contact`, `update_contact`, `delete_contact`) on Phase 4's confirmation machinery**, with strict zod argument validation, atomic claim-before-execute for confirm-mode billable/destructive ops, and idempotent `create_contact` via a local `idempotency_records` table. Phase 4 shipped the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting. Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
 
 ## Status
 
+- Phase 5 complete: `v0.6.0-phase5` tag.
 - Phase 4 complete: `v0.5.0-phase4` tag.
 - Phase 3 complete: `v0.4.0-phase3` tag.
 - Phase 2 complete: `v0.2.0-phase2` tag.
@@ -13,12 +14,14 @@ A multi-tenant SaaS MCP server for Openprovider. **Phase 4 ships the policy engi
 
 - **Spec:** `docs/superpowers/specs/2026-05-21-enterprise-mcp-design.md`
 - **Phase 3 auth spec:** `docs/superpowers/specs/2026-05-26-phase3-auth-tenant-mapping-design.md`
+- **Phase 5 spec:** `docs/superpowers/specs/2026-05-26-phase5-write-tools-design.md`
 - **Phase roadmap:** `docs/superpowers/plans/2026-05-21-enterprise-mcp-roadmap.md`
 - **Phase 1 plan:** `docs/superpowers/plans/2026-05-21-enterprise-mcp-phase-1-foundation.md`
 - **Phase 2 plan:** `docs/superpowers/plans/2026-05-22-enterprise-mcp-phase-2-vertical-slice.md`
 - **Phase 3 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-3.md`
 - **Phase 4 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-4.md`
 - **Phase 4 spec:** `docs/superpowers/specs/2026-05-26-phase4-policy-confirmations-design.md`
+- **Phase 5 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-5.md`
 - **WorkOS dev project decision:** `docs/superpowers/decisions/2026-05-22-workos-dev-project.md` (created during Phase 2 Task 1)
 - **Legacy v0.1 server:** archived on the `legacy/v0.1` branch.
 
@@ -34,6 +37,22 @@ A multi-tenant SaaS MCP server for Openprovider. **Phase 4 ships the policy engi
 | `get_contact` | **live** | fetches one contact by Openprovider contact id |
 | `list_pending_confirmations` | **live** (meta) | lists confirmations the caller's role may approve |
 | `confirm_pending` | **live** (meta) | approves and executes a pending confirmation by id |
+| `register_domain` | **live** (confirm-mode) | registers a new domain (billable); requires an existing owner contact handle |
+| `update_domain` | **live** (confirm-mode) | updates nameservers, autorenew, DNSSEC, WHOIS privacy |
+| `create_contact` | **live** (allow-mode) | creates a new contact handle; idempotent on identical args (10-min window) |
+| `update_contact` | **live** (confirm-mode) | updates an existing contact by id |
+| `delete_contact` | **live** (confirm-mode) | deletes a contact by id (destructive) |
+
+### Write operations
+
+Confirm-mode tools (`register_domain`, `update_domain`, `update_contact`, `delete_contact`) follow a two-step flow:
+
+1. Call the tool without a confirmation token → the server returns `confirmation_required` with a `confirmation_id`.
+2. An approver (owner or admin role) calls `confirm_pending` with that `confirmation_id` to execute the operation.
+
+Writes are deduplicated: confirm-mode tools atomically claim the confirmation before executing (a concurrent second `confirm_pending` for the same id is rejected); `create_contact` (allow-mode) deduplicates by args hash with a 10-minute replay window.
+
+`register_domain` does **not** auto-create contacts — create the owner contact handle first with `create_contact`, then pass the returned handle as `owner_handle` to `register_domain`.
 
 ## Spend controls & confirmations
 
