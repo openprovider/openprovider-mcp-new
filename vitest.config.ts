@@ -20,6 +20,8 @@ export default defineConfig({
         'src/openprovider/token-cache-pg.ts',
         'src/audit/pg-sink.ts',
         'src/policies/repo.ts',
+        'src/tools/list-pending-confirmations.ts',
+        'src/tools/confirm-pending.ts',
       ],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },
