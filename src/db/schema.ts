@@ -6,6 +6,7 @@ import {
   uuid,
   integer,
   bigserial,
+  bigint,
   jsonb,
   numeric,
 } from 'drizzle-orm/pg-core';
@@ -83,6 +84,8 @@ export const auditEvents = pgTable('audit_events', {
   errorCode: text('error_code'),
   traceId: text('trace_id'),
   spanId: text('span_id'),
+  prevHash: bytea('prev_hash'),
+  rowHash: bytea('row_hash'),
 });
 
 export const policies = pgTable('policies', {
@@ -134,4 +137,18 @@ export const spendReservations = pgTable('spend_reservations', {
   windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   settledAt: timestamp('settled_at', { withTimezone: true }),
+});
+
+export const auditArchives = pgTable('audit_archives', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),
+  objectUrl: text('object_url').notNull(),
+  sha256: text('sha256').notNull(),
+  firstId: bigint('first_id', { mode: 'bigint' }).notNull(),
+  lastId: bigint('last_id', { mode: 'bigint' }).notNull(),
+  lastRowHash: bytea('last_row_hash').notNull(),
+  sealedAt: timestamp('sealed_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -10,6 +10,7 @@
     { "idx": 5, "version": "5", "when": 1748000000000, "tag": "0006_create_openprovider_accounts", "breakpoints": true },
     { "idx": 6, "version": "5", "when": 1748200000000, "tag": "0007_resolve_or_provision_tenant", "breakpoints": true },
     { "idx": 7, "version": "5", "when": 1748300000000, "tag": "0008_policies_confirmations_reservations", "breakpoints": true },
-    { "idx": 8, "version": "5", "when": 1748400000000, "tag": "0009_idempotency_records", "breakpoints": true }
+    { "idx": 8, "version": "5", "when": 1748400000000, "tag": "0009_idempotency_records", "breakpoints": true },
+    { "idx": 9, "version": "5", "when": 1748500000000, "tag": "0010_audit_chain", "breakpoints": true }
   ]
 }
