@@ -5,7 +5,16 @@ import {
   OpenproviderUnavailableError,
   OpenproviderClientError,
 } from './errors.js';
-import { CheckDomainArgs, CheckDomainResult, ListDomainsArgs, ListContactsArgs } from './types.js';
+import {
+  CheckDomainArgs,
+  CheckDomainResult,
+  ListDomainsArgs,
+  ListContactsArgs,
+  RegisterDomainArgs,
+  UpdateDomainArgs,
+  CreateContactArgs,
+  UpdateContactArgs,
+} from './types.js';
 
 export interface OpenproviderClientConfig {
   baseUrl?: string;
@@ -24,6 +33,25 @@ export interface OpenproviderClient {
   getDomain(token: string, id: number): Promise<unknown>;
   listContacts(token: string, args: ListContactsArgs): Promise<unknown>;
   getContact(token: string, id: number): Promise<unknown>;
+  registerDomain(
+    token: string,
+    args: RegisterDomainArgs,
+    idempotencyKey?: string,
+  ): Promise<unknown>;
+  updateDomain(
+    token: string,
+    id: number,
+    args: UpdateDomainArgs,
+    idempotencyKey?: string,
+  ): Promise<unknown>;
+  createContact(token: string, args: CreateContactArgs, idempotencyKey?: string): Promise<unknown>;
+  updateContact(
+    token: string,
+    id: number,
+    args: UpdateContactArgs,
+    idempotencyKey?: string,
+  ): Promise<unknown>;
+  deleteContact(token: string, id: number, idempotencyKey?: string): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -39,6 +67,7 @@ export function createOpenproviderClient(
     path: string,
     token: string,
     body?: unknown,
+    extraHeaders?: Record<string, string>,
   ): Promise<unknown> {
     const attempt = async (n: number): Promise<unknown> => {
       const ctrl = new AbortController();
@@ -50,6 +79,7 @@ export function createOpenproviderClient(
             'content-type': 'application/json',
             authorization: `Bearer ${token}`,
             'user-agent': 'openprovider-mcp/0.2.0-phase2',
+            ...(extraHeaders ?? {}),
           },
           body: body === undefined ? null : JSON.stringify(body),
           signal: ctrl.signal,
@@ -122,6 +152,39 @@ export function createOpenproviderClient(
     },
     async getContact(token, id) {
       const body = await request('GET', `/contacts/${id}`, token);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async registerDomain(token, args, idempotencyKey) {
+      const parsed = RegisterDomainArgs.parse(args);
+      const headers = idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : undefined;
+      const body = await request('POST', '/domains', token, parsed, headers);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async updateDomain(token, id, args, idempotencyKey) {
+      const parsed = UpdateDomainArgs.parse(args);
+      const headers = idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : undefined;
+      // `id` is in the path; send only the remaining fields as body.
+      const bodyArgs = Object.fromEntries(Object.entries(parsed).filter(([k]) => k !== 'id'));
+      const body = await request('PUT', `/domains/${id}`, token, bodyArgs, headers);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async createContact(token, args, idempotencyKey) {
+      const parsed = CreateContactArgs.parse(args);
+      const headers = idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : undefined;
+      const body = await request('POST', '/contacts', token, parsed, headers);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async updateContact(token, id, args, idempotencyKey) {
+      const parsed = UpdateContactArgs.parse(args);
+      const headers = idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : undefined;
+      // `id` is in the path; send only the remaining fields as body.
+      const bodyArgs = Object.fromEntries(Object.entries(parsed).filter(([k]) => k !== 'id'));
+      const body = await request('PUT', `/contacts/${id}`, token, bodyArgs, headers);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async deleteContact(token, id, idempotencyKey) {
+      const headers = idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : undefined;
+      const body = await request('DELETE', `/contacts/${id}`, token, undefined, headers);
       return (body as { data?: unknown }).data ?? body;
     },
     async checkDomain(token, args) {

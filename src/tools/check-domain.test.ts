@@ -21,6 +21,11 @@ describe('check_domain tool', () => {
       getDomain: vi.fn(),
       listContacts: vi.fn(),
       getContact: vi.fn(),
+      registerDomain: vi.fn(),
+      updateDomain: vi.fn(),
+      createContact: vi.fn(),
+      updateContact: vi.fn(),
+      deleteContact: vi.fn(),
     };
     const tokenManager = {
       getToken: vi.fn().mockResolvedValue('jwt'),
@@ -50,6 +55,11 @@ describe('check_domain tool', () => {
       getDomain: vi.fn(),
       listContacts: vi.fn(),
       getContact: vi.fn(),
+      registerDomain: vi.fn(),
+      updateDomain: vi.fn(),
+      createContact: vi.fn(),
+      updateContact: vi.fn(),
+      deleteContact: vi.fn(),
     };
     const tokenManager = {
       getToken: vi.fn().mockResolvedValue('jwt'),

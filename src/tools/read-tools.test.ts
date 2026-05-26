@@ -22,6 +22,11 @@ function deps() {
       getDomain: vi.fn().mockResolvedValue({ id: 42 }),
       listContacts: vi.fn().mockResolvedValue({ results: [] }),
       getContact: vi.fn().mockResolvedValue({ id: 7 }),
+      registerDomain: vi.fn(),
+      updateDomain: vi.fn(),
+      createContact: vi.fn(),
+      updateContact: vi.fn(),
+      deleteContact: vi.fn(),
     },
     tokenManager: { getToken: vi.fn().mockResolvedValue('jwt'), invalidate: vi.fn() },
   };
