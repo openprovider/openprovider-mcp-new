@@ -139,6 +139,22 @@ export const spendReservations = pgTable('spend_reservations', {
   settledAt: timestamp('settled_at', { withTimezone: true }),
 });
 
+export const apiKeys = pgTable('api_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  prefix: text('prefix').notNull(),
+  hash: text('hash').notNull(),
+  name: text('name').notNull(),
+  createdByUserId: uuid('created_by_user_id'),
+  scopes: text('scopes').array().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+});
+
 export const auditArchives = pgTable('audit_archives', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id')
