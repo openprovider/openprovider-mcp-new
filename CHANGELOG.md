@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0-phase3] — 2026-05-26
+
+### Added
+- Real WorkOS AuthKit token authentication: verifier returns {subject,email}; each user maps 1:1 to a tenant via users.oauth_subject.
+- `resolve_or_provision_tenant()` SECURITY DEFINER function — atomic JIT tenant+owner provisioning on first login, savepoint-guarded against the first-login race.
+- Read tools live: `list_domains`, `get_domain`, `list_contacts`, `get_contact` (passthrough data shapes).
+- `OpenproviderAccountNotConnected` → structured `openprovider_not_connected` error for tenants that haven't linked Openprovider yet.
+- `tenant:onboard` CLI to seed encrypted Openprovider credentials.
+- `secrets/dek.ts` — single source of truth for per-tenant DEK retrieval (consolidated from store + token cache).
+- Per-principal rate limit: auth resolves in an onRequest hook; the limiter keys on principal.subject.
+
+### Changed
+- Identity resolver no longer requires act.tnt or mcp:* scopes; role comes from users.role.
+- Verifier VerifiedClaims is now {subject,email,expiresAt}.
+
+### Deferred to later phases
+- Policy engine + confirmations + spend reservations (Phase 4).
+- Write tools + approver workflow (Phase 5).
+- Dashboard + API keys (Phase 6).
+
 ## [0.2.0-phase2] — 2026-05-22
 
 ### Added
