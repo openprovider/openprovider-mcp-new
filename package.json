@@ -24,6 +24,7 @@
     "policy:show": "tsx scripts/policy.ts show",
     "policy:set": "tsx scripts/policy.ts set",
     "audit:verify": "tsx scripts/audit-verify.ts",
+    "audit:seal": "tsx scripts/audit-seal.ts",
     "prepare": "husky"
   },
   "dependencies": {

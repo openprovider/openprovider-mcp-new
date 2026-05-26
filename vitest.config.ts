@@ -18,6 +18,7 @@ export default defineConfig({
         'src/openprovider/errors.ts',
         'src/openprovider/token-cache-pg.ts',
         'src/audit/pg-sink.ts',
+        'src/audit/object-store.ts',
         'src/policies/repo.ts',
         'src/tools/list-pending-confirmations.ts',
         'src/tools/confirm-pending.ts',
