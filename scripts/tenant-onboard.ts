@@ -3,8 +3,7 @@ import { parseArgs } from 'node:util';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db/client.js';
 import { createGcpKms } from '../src/secrets/gcp-kms.js';
-import { createSecretsStore } from '../src/secrets/store.js';
-import { createDbSecretsRepo } from '../src/secrets/db-repo.js';
+import { onboardCredentials } from '../src/tenants/onboard-credentials.js';
 
 // Usage:
 //   tsx scripts/tenant-onboard.ts --tenant <uuid> --username <op-user> --password <op-pass>
@@ -32,19 +31,10 @@ async function main(): Promise<void> {
     await client.query('SET LOCAL ROLE app_role');
     await client.query('SELECT set_config($1,$2,true)', ['app.current_tenant', values.tenant]);
 
-    await client.query(
-      `INSERT INTO openprovider_accounts (tenant_id, username)
-       VALUES ($1, $2)
-       ON CONFLICT (tenant_id) DO UPDATE SET username = EXCLUDED.username, status = 'connected'`,
-      [values.tenant, values.username],
+    await onboardCredentials(
+      { client, kms, kmsKeyName: cfg.gcpKmsKeyName },
+      { tenantId: values.tenant, username: values.username, password: values.password },
     );
-
-    const store = createSecretsStore({
-      kms,
-      kmsKeyArn: cfg.gcpKmsKeyName,
-      repo: createDbSecretsRepo(client),
-    });
-    await store.put(values.tenant, 'openprovider.password', Buffer.from(values.password, 'utf8'));
 
     await client.query('COMMIT');
     console.error(`Onboarded Openprovider account for tenant ${values.tenant}`);
