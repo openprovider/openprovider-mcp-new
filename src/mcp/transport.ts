@@ -7,6 +7,7 @@ import { createMcpSdkServer, type ToolEntry } from './sdk-transport.js';
 import { createIdentityResolver } from '../auth/identity.js';
 import type { Principal } from '../auth/principal.js';
 import type { AccessTokenVerifier } from '../auth/oauth/workos.js';
+import type { TenantResolver } from '../auth/tenant-resolver.js';
 import { withRequestContext } from '../observability/request-context.js';
 import { randomUUID } from 'node:crypto';
 
@@ -28,6 +29,7 @@ export interface McpServerConfig {
   };
   tools?: ToolEntry[];
   verifier?: AccessTokenVerifier;
+  resolveTenant?: TenantResolver;
   /**
    * Factory invoked per `tools/call` request. Receives the principal and returns a fully-wired
    * dispatch function plus a cleanup callback. Phase 2 uses this to acquire a pg connection,
@@ -55,6 +57,7 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     devToken: config.devToken,
     devPrincipal: config.devPrincipal,
     ...(config.verifier !== undefined ? { verifier: config.verifier } : {}),
+    ...(config.resolveTenant !== undefined ? { resolveTenant: config.resolveTenant } : {}),
   });
 
   app.get('/healthz', () => Promise.resolve({ ok: true }));

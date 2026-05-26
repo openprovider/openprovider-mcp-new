@@ -10,11 +10,17 @@ import type { Principal } from './auth/principal.js';
 import { createDispatcher } from './mcp/dispatch.js';
 import { createPgAuditSink } from './audit/pg-sink.js';
 import { createCheckDomainTool } from './tools/check-domain.js';
+import { createListDomainsTool } from './tools/list-domains.js';
+import { createGetDomainTool } from './tools/get-domain.js';
+import { createListContactsTool } from './tools/list-contacts.js';
+import { createGetContactTool } from './tools/get-contact.js';
 import { createOpenproviderClient } from './openprovider/client.js';
 import { createOpenproviderTokenManager } from './openprovider/token-manager.js';
 import { createPgTokenCache } from './openprovider/token-cache-pg.js';
 import { createSecretsStore } from './secrets/store.js';
 import { createDbSecretsRepo } from './secrets/db-repo.js';
+import { createTenantResolver } from './auth/tenant-resolver.js';
+import { OpenproviderAccountNotConnected } from './openprovider/errors.js';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -25,6 +31,7 @@ async function main(): Promise<void> {
   });
 
   const { pool } = createDb({ connectionString: cfg.databaseUrl });
+  const resolveTenant = createTenantResolver(pool);
   const kms = createAwsKms({
     region: cfg.awsRegion,
     ...(cfg.awsEndpoint ? { endpoint: cfg.awsEndpoint } : {}),
@@ -74,14 +81,14 @@ async function main(): Promise<void> {
           [tenantId],
         );
         const username = u.rows[0]?.username;
-        if (!username) throw new Error(`no openprovider account for tenant ${tenantId}`);
+        if (!username) throw new OpenproviderAccountNotConnected();
         const store = createSecretsStore({
           kms,
           kmsKeyArn: cfg.kmsKeyArn,
           repo: createDbSecretsRepo(client),
         });
         const passwordBuf = await store.get(tenantId, 'openprovider.password');
-        if (!passwordBuf) throw new Error(`no openprovider password for tenant ${tenantId}`);
+        if (!passwordBuf) throw new OpenproviderAccountNotConnected();
         return { username, password: passwordBuf.toString('utf8') };
       };
 
@@ -101,7 +108,13 @@ async function main(): Promise<void> {
         }),
       });
 
-      const tools = [createCheckDomainTool({ client: openproviderClient, tokenManager })];
+      const tools = [
+        createCheckDomainTool({ client: openproviderClient, tokenManager }),
+        createListDomainsTool({ client: openproviderClient, tokenManager }),
+        createGetDomainTool({ client: openproviderClient, tokenManager }),
+        createListContactsTool({ client: openproviderClient, tokenManager }),
+        createGetContactTool({ client: openproviderClient, tokenManager }),
+      ];
 
       const dispatch = createDispatcher({
         tools,
@@ -139,6 +152,7 @@ async function main(): Promise<void> {
     devToken: cfg.devBearerToken,
     devPrincipal,
     verifier,
+    resolveTenant,
     oauth: {
       authorizationServer: cfg.workosAuthkitDomain,
       resource: `http://localhost:${cfg.port}`,
