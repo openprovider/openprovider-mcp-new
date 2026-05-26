@@ -1,0 +1,43 @@
+<% layout('./layout') %>
+<h1>Openprovider Credentials</h1>
+
+<% if (it.ok) { %>
+<p style="color:green">Credentials saved successfully.</p>
+<% } %>
+
+<% if (it.error) { %>
+<p style="color:red"><%= it.error %></p>
+<% } %>
+
+<form method="post" action="/dashboard/openprovider">
+  <input type="hidden" name="_csrf" value="<%= it.csrf %>">
+
+  <div>
+    <label for="username">Openprovider Username</label><br>
+    <input
+      type="text"
+      id="username"
+      name="username"
+      value="<%= it.username %>"
+      required
+      autocomplete="username"
+      style="width:100%;max-width:400px"
+    >
+  </div>
+
+  <div style="margin-top:1rem">
+    <label for="password">Openprovider Password</label><br>
+    <input
+      type="password"
+      id="password"
+      name="password"
+      required
+      autocomplete="current-password"
+      style="width:100%;max-width:400px"
+    >
+  </div>
+
+  <div style="margin-top:1rem">
+    <button type="submit">Save Credentials</button>
+  </div>
+</form>

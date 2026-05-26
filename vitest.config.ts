@@ -22,6 +22,10 @@ export default defineConfig({
         'src/policies/repo.ts',
         'src/tools/list-pending-confirmations.ts',
         'src/tools/confirm-pending.ts',
+        // Dashboard + tenant helpers covered by integration tests:
+        'src/dashboard/routes/**',
+        'src/dashboard/with-tenant-conn.ts',
+        'src/tenants/onboard-credentials.ts',
       ],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },

@@ -11,6 +11,9 @@ import type { Principal } from './auth/principal.js';
 import { createDispatcher, type ConfirmDeps, type DispatcherTool } from './mcp/dispatch.js';
 import { WorkOS } from '@workos-inc/node';
 import { registerDashboard } from './dashboard/server.js';
+import { registerOverview } from './dashboard/routes/overview.js';
+import { registerOpenprovider } from './dashboard/routes/openprovider.js';
+import { registerPolicy } from './dashboard/routes/policy.js';
 import { createPgAuditSink } from './audit/pg-sink.js';
 import { createCheckDomainTool } from './tools/check-domain.js';
 import { createListDomainsTool } from './tools/list-domains.js';
@@ -455,8 +458,12 @@ async function main(): Promise<void> {
       return { tenantId: t.tenantId, userId: t.userId };
     },
 
-    // Tasks 7–8 will attach page routes; no-op for the Phase 6 scaffold.
-    registerPages: () => {},
+    // Tasks 7–8 page routes.
+    registerPages: (pageApp) => {
+      registerOverview(pageApp, { pool });
+      registerOpenprovider(pageApp, { pool, kms, kmsKeyName: cfg.gcpKmsKeyName });
+      registerPolicy(pageApp, { pool });
+    },
   });
 
   const shutdown = async (): Promise<void> => {

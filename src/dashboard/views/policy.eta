@@ -1,0 +1,28 @@
+<% layout('./layout') %>
+<h1>Policy Editor</h1>
+
+<% if (it.ok) { %>
+<p style="color:green">Policy saved successfully.</p>
+<% } %>
+
+<% if (it.error) { %>
+<p style="color:red" id="policy-error"><%= it.error %></p>
+<% } %>
+
+<form method="post" action="/dashboard/policy">
+  <input type="hidden" name="_csrf" value="<%= it.csrf %>">
+
+  <div>
+    <label for="policy">Policy JSON</label><br>
+    <textarea
+      id="policy"
+      name="policy"
+      rows="30"
+      style="width:100%;max-width:800px;font-family:monospace;font-size:0.9rem"
+    ><%= it.policyJson %></textarea>
+  </div>
+
+  <div style="margin-top:1rem">
+    <button type="submit">Save Policy</button>
+  </div>
+</form>

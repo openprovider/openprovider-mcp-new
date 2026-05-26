@@ -1,0 +1,26 @@
+<% layout('./layout') %>
+<h1>Overview</h1>
+
+<section>
+  <h2>Openprovider Account</h2>
+  <p>Status: <strong><%= it.accountStatus %></strong></p>
+  <% if (it.accountStatus === 'not connected') { %>
+  <p><a href="/dashboard/openprovider">Connect your Openprovider account →</a></p>
+  <% } %>
+</section>
+
+<section>
+  <h2>Spend</h2>
+  <p>Monthly cap: <strong>€<%= it.spendCapEur %></strong></p>
+  <p>Live spend (this month): <strong>€<%= it.liveSpendEur %></strong></p>
+</section>
+
+<section>
+  <h2>Quick Links</h2>
+  <ul>
+    <li><a href="/dashboard/policy">Edit Policy</a></li>
+    <li><a href="/dashboard/keys">API Keys</a></li>
+    <li><a href="/dashboard/audit">Audit Log</a></li>
+    <li><a href="/dashboard/confirmations">Pending Confirmations</a></li>
+  </ul>
+</section>
