@@ -1,12 +1,14 @@
 import type { Principal } from './principal.js';
 import type { AccessTokenVerifier } from './oauth/workos.js';
 import type { TenantResolver } from './tenant-resolver.js';
+import type { ApiKeyResolver } from './api-key.js';
 
 export interface IdentityResolverConfig {
   devToken: string;
   devPrincipal: Principal;
   verifier?: AccessTokenVerifier;
   resolveTenant?: TenantResolver;
+  apiKeyResolver?: ApiKeyResolver;
 }
 
 export type IdentityResolver = (
@@ -22,7 +24,8 @@ export function createIdentityResolver(config: IdentityResolverConfig): Identity
     if (scheme !== 'Bearer' || !token) return null;
     if (token === config.devToken) return config.devPrincipal;
     if (token.startsWith('op_live_')) {
-      throw new Error('API key authentication lands in phase 6');
+      if (!config.apiKeyResolver) return null;
+      return config.apiKeyResolver(token);
     }
     if (config.verifier && config.resolveTenant) {
       let claims;

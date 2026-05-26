@@ -8,6 +8,7 @@ import { createIdentityResolver } from '../auth/identity.js';
 import type { Principal } from '../auth/principal.js';
 import type { AccessTokenVerifier } from '../auth/oauth/workos.js';
 import type { TenantResolver } from '../auth/tenant-resolver.js';
+import type { ApiKeyResolver } from '../auth/api-key.js';
 import { withRequestContext } from '../observability/request-context.js';
 import { randomUUID } from 'node:crypto';
 
@@ -37,6 +38,7 @@ export interface McpServerConfig {
   tools?: ToolEntry[];
   verifier?: AccessTokenVerifier;
   resolveTenant?: TenantResolver;
+  apiKeyResolver?: ApiKeyResolver;
   /**
    * Factory invoked per `tools/call` request. Receives the principal and returns a fully-wired
    * dispatch function plus a cleanup callback. Phase 2 uses this to acquire a pg connection,
@@ -55,6 +57,7 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     devPrincipal: config.devPrincipal,
     ...(config.verifier !== undefined ? { verifier: config.verifier } : {}),
     ...(config.resolveTenant !== undefined ? { resolveTenant: config.resolveTenant } : {}),
+    ...(config.apiKeyResolver !== undefined ? { apiKeyResolver: config.apiKeyResolver } : {}),
   });
 
   // Auth hook must run BEFORE the rate-limit plugin registers its own onRequest hook,
@@ -66,7 +69,7 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
     try {
       principal = await resolve(req.headers.authorization);
     } catch {
-      // API-key-not-implemented path throws; treat as 401 for now.
+      // Unexpected resolver error — treat as 401.
       principal = null;
     }
     if (!principal) {

@@ -8,6 +8,7 @@ import type { AddressInfo } from 'node:net';
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
 import { migratedDb, runAsTenant } from '../_helpers/db.js';
 import { createFakeJwks, type FakeJwks } from '../_helpers/fake-jwks.js';
+import { issueApiKey, createApiKeyResolver } from '../../../src/auth/api-key.js';
 
 import { createMcpServer } from '../../../src/mcp/transport.js';
 import { createWorkOsVerifier } from '../../../src/auth/oauth/workos.js';
@@ -1700,5 +1701,254 @@ describe('phase 2 end-to-end', () => {
         'POST /v1beta/domains must have been called exactly once (losing claim must not reach upstream)',
       ).toBe(true);
     }, 120_000);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase 6: API-key auth — op_live_ key authenticates /mcp; revoked → 401
+  // ---------------------------------------------------------------------------
+  describe('phase 6: API-key auth path', () => {
+    let p6App: FastifyInstance;
+    let p6BaseUrl: string;
+    let tenantP6: string;
+    let issuedKey: string;
+    let issuedKeyId: string;
+
+    beforeAll(async () => {
+      // Provision a tenant via resolve_or_provision_tenant (SECURITY DEFINER) —
+      // same pattern as p4/p5 tests; avoids direct INSERT into tenants (which needs RLS context).
+      const seedClient = await pool.connect();
+      try {
+        await seedClient.query('SET ROLE app_role');
+        const r = await seedClient.query<{ tenant_id: string }>(
+          `SELECT * FROM resolve_or_provision_tenant($1, $2)`,
+          ['p6_service_sub', 'p6service@example.com'],
+        );
+        tenantP6 = r.rows[0]!.tenant_id;
+      } finally {
+        seedClient.release();
+      }
+
+      // Seed openprovider_accounts inside a proper RLS-scoped transaction.
+      await runAsTenant(pool, tenantP6, async (client) => {
+        await client.query(
+          `INSERT INTO openprovider_accounts (tenant_id, username)
+           VALUES ($1, 'op-p6')
+           ON CONFLICT (tenant_id) DO UPDATE SET username = EXCLUDED.username`,
+          [tenantP6],
+        );
+      });
+
+      // Encrypt and store the Openprovider password for the tenant.
+      const kmsLocal = createFakeKms();
+      await runAsTenant(pool, tenantP6, async (client) => {
+        const store = createSecretsStore({
+          kms: kmsLocal,
+          kmsKeyArn: 'fake-key',
+          repo: createDbSecretsRepo(client),
+        });
+        await store.put(tenantP6, 'openprovider.password', Buffer.from('pw-p6'));
+      });
+
+      // Issue an API key under the tenant context.
+      await runAsTenant(pool, tenantP6, async (client) => {
+        const issued = await issueApiKey(client, {
+          tenantId: tenantP6,
+          name: 'p6-test-key',
+          scopes: ['mcp:read', 'mcp:write'],
+        });
+        issuedKey = issued.key;
+        issuedKeyId = issued.id;
+      });
+
+      // Build a dispatchFactory wired with check_domain + apiKeyResolver.
+      const openproviderClient = createOpenproviderClient();
+      const apiKeyResolver = createApiKeyResolver(pool);
+
+      async function p6DispatchFactory(principal: Principal) {
+        const client = await pool.connect();
+        let inTx = false;
+        try {
+          await client.query('BEGIN');
+          inTx = true;
+          await client.query('SET LOCAL ROLE app_role');
+          await client.query('SELECT set_config($1, $2, true)', [
+            'app.current_tenant',
+            principal.tenantId,
+          ]);
+
+          const kmsLocal = createFakeKms();
+
+          async function fetchCredentials(
+            tid: string,
+          ): Promise<{ username: string; password: string }> {
+            const u = await client.query<{ username: string }>(
+              'SELECT username FROM openprovider_accounts WHERE tenant_id = $1',
+              [tid],
+            );
+            const username = u.rows[0]?.username;
+            if (!username) throw new OpenproviderAccountNotConnected();
+            const store = createSecretsStore({
+              kms: kmsLocal,
+              kmsKeyArn: 'fake-key',
+              repo: createDbSecretsRepo(client),
+            });
+            const passwordBuf = await store.get(tid, 'openprovider.password');
+            if (!passwordBuf) throw new OpenproviderAccountNotConnected();
+            return { username, password: passwordBuf.toString('utf8') };
+          }
+
+          const tokenManager = createOpenproviderTokenManager({
+            fetchCredentials,
+            cache: createPgTokenCache({
+              client,
+              getDek: async (tid) => {
+                const r = await client.query<{ wrapped_dek: Buffer; kms_key_arn: string }>(
+                  'SELECT wrapped_dek, kms_key_arn FROM tenant_keys WHERE tenant_id = $1',
+                  [tid],
+                );
+                if (!r.rows[0]) throw new Error(`no tenant_keys row for ${tid}`);
+                return kmsLocal.decrypt(r.rows[0].kms_key_arn, r.rows[0].wrapped_dek);
+              },
+            }),
+          });
+
+          const tools = [createCheckDomainTool({ client: openproviderClient, tokenManager })];
+          const dispatch = createDispatcher({ tools, audit: createPgAuditSink(client) });
+
+          return {
+            dispatch,
+            cleanup: async () => {
+              try {
+                if (inTx) await client.query('COMMIT');
+              } catch {
+                try {
+                  await client.query('ROLLBACK');
+                } catch {
+                  /* ignore */
+                }
+              } finally {
+                inTx = false;
+                client.release();
+              }
+            },
+          };
+        } catch (err) {
+          try {
+            if (inTx) await client.query('ROLLBACK');
+          } catch {
+            /* ignore */
+          }
+          client.release();
+          throw err;
+        }
+      }
+
+      p6App = await createMcpServer({
+        devToken: 'never-used-p6',
+        devPrincipal: {
+          kind: 'user',
+          tenantId: '00000000-0000-0000-0000-000000000000',
+          userId: '00000000-0000-0000-0000-000000000000',
+          subject: 'dev',
+          scopes: [],
+          role: 'viewer',
+        },
+        apiKeyResolver,
+        dispatchFactory: p6DispatchFactory,
+      });
+      await p6App.listen({ host: '127.0.0.1', port: 0 });
+      const addr = p6App.server.address() as AddressInfo;
+      p6BaseUrl = `http://127.0.0.1:${addr.port}`;
+    }, 120_000);
+
+    afterAll(async () => {
+      if (p6App) await p6App.close();
+      nock.cleanAll();
+    });
+
+    async function p6InitSession(bearer: string): Promise<{ sid: string; status: number }> {
+      const r = await fetch(`${p6BaseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${bearer}`,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 0,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-06-18',
+            capabilities: {},
+            clientInfo: { name: 'e2e-p6', version: '0' },
+          },
+        }),
+      });
+      const sid = r.headers.get('mcp-session-id') ?? '';
+      return { sid, status: r.status };
+    }
+
+    async function p6CallCheckDomain(sid: string, bearer: string): Promise<unknown> {
+      const r = await fetch(`${p6BaseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${bearer}`,
+          'mcp-session-id': sid,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: {
+            name: 'check_domain',
+            arguments: { domains: [{ name: 'p6test', extension: 'com' }], with_price: false },
+          },
+        }),
+      });
+      const text = await r.text();
+      const jsonLine = text.includes('data:')
+        ? text
+            .split('\n')
+            .find((l) => l.startsWith('data:'))!
+            .slice(5)
+            .trim()
+        : text;
+      return JSON.parse(jsonLine) as unknown;
+    }
+
+    it('scenario P6-a: valid API key authenticates /mcp and check_domain succeeds', async () => {
+      nock('https://api.openprovider.eu')
+        .post('/v1beta/auth/login')
+        .reply(200, { data: { token: 'jwt-p6a', reseller_id: 1 } });
+      nock('https://api.openprovider.eu')
+        .post('/v1beta/domains/check')
+        .reply(200, { data: { results: [{ domain: 'p6test.com', status: 'free' }] } });
+
+      const { sid, status } = await p6InitSession(issuedKey);
+      expect(status).toBe(200);
+      expect(sid).toBeTruthy();
+
+      const body = (await p6CallCheckDomain(sid, issuedKey)) as {
+        result?: { content: { text: string }[] };
+        error?: { message: string };
+      };
+      const innerText = body.result?.content[0]?.text;
+      expect(innerText, 'check_domain should succeed, got: ' + JSON.stringify(body)).toBeDefined();
+      const parsed = JSON.parse(innerText ?? '{}') as { results: { domain: string }[] };
+      expect(parsed.results[0]?.domain).toBe('p6test.com');
+    }, 60_000);
+
+    it('scenario P6-b: revoked API key → 401', async () => {
+      // Revoke the key.
+      await runAsTenant(pool, tenantP6, async (c) => {
+        await c.query('UPDATE api_keys SET revoked_at = now() WHERE id = $1', [issuedKeyId]);
+      });
+
+      const { status } = await p6InitSession(issuedKey);
+      expect(status).toBe(401);
+    }, 30_000);
   });
 });

@@ -34,8 +34,50 @@ describe('identity resolver', () => {
     expect(await resolve('Basic xyz')).toBeNull();
   });
 
-  it('throws for API key path (not implemented in phase 1)', async () => {
-    await expect(resolve('Bearer op_live_xxx')).rejects.toThrow(/api key.*phase/i);
+  it('returns null for op_live_ key when no apiKeyResolver configured', async () => {
+    expect(await resolve('Bearer op_live_xxx')).toBeNull();
+  });
+
+  it('resolves an op_live_ key via the apiKeyResolver', async () => {
+    const resolve2 = createIdentityResolver({
+      devToken: 'dev',
+      devPrincipal: {
+        kind: 'user',
+        tenantId: 't',
+        userId: 'u',
+        subject: 'dev',
+        scopes: [],
+        role: 'owner',
+      },
+      apiKeyResolver: (k) =>
+        k === 'op_live_good'
+          ? Promise.resolve({
+              kind: 'service',
+              tenantId: 'tnt',
+              apiKeyId: 'ak',
+              subject: 'apikey:ak',
+              scopes: ['mcp:read'],
+            })
+          : Promise.resolve(null),
+    });
+    const p = await resolve2('Bearer op_live_good');
+    expect(p?.kind).toBe('service');
+  });
+
+  it('returns null for an unknown op_live_ key', async () => {
+    const resolve3 = createIdentityResolver({
+      devToken: 'dev',
+      devPrincipal: {
+        kind: 'user',
+        tenantId: 't',
+        userId: 'u',
+        subject: 'dev',
+        scopes: [],
+        role: 'owner',
+      },
+      apiKeyResolver: () => Promise.resolve(null),
+    });
+    expect(await resolve3('Bearer op_live_nope')).toBeNull();
   });
 
   it('resolves a verified token to a Principal via resolveTenant (role from DB)', async () => {

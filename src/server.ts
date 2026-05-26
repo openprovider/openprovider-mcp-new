@@ -6,6 +6,7 @@ import { createLogger } from './observability/logger.js';
 import { createDb } from './db/client.js';
 import { createGcpKms } from './secrets/gcp-kms.js';
 import { createWorkOsVerifier } from './auth/oauth/workos.js';
+import { createApiKeyResolver } from './auth/api-key.js';
 import type { Principal } from './auth/principal.js';
 import { createDispatcher, type ConfirmDeps, type DispatcherTool } from './mcp/dispatch.js';
 import { createPgAuditSink } from './audit/pg-sink.js';
@@ -208,7 +209,8 @@ async function main(): Promise<void> {
           const live = await liveSpendCents(client, p.tenantId);
           const opToken = await tokenManagerSafeToken(p.tenantId);
           const estimatedCostCents = await pricing.price(toolName, args, opToken);
-          const callerRole: Role = p.kind === 'user' ? p.role : 'viewer';
+          const callerRole: Role =
+            p.kind === 'user' ? p.role : p.scopes.includes('mcp:write') ? 'operator' : 'viewer';
           const decision = evaluate({
             toolName,
             args,
@@ -377,11 +379,14 @@ async function main(): Promise<void> {
     }
   }
 
+  const apiKeyResolver = createApiKeyResolver(pool);
+
   const app = await createMcpServer({
     devToken: cfg.devBearerToken,
     devPrincipal,
     verifier,
     resolveTenant,
+    apiKeyResolver,
     oauth: {
       authorizationServer: cfg.workosAuthkitDomain,
       resource: `http://localhost:${cfg.port}`,
