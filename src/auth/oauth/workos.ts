@@ -18,8 +18,7 @@ export interface WorkOsVerifierConfig {
 
 export interface VerifiedClaims {
   subject: string;
-  scopes: string[];
-  tenantId: string;
+  email: string;
   expiresAt: Date;
 }
 
@@ -38,14 +37,11 @@ export function createWorkOsVerifier(config: WorkOsVerifierConfig): AccessTokenV
         algorithms: ['RS256'],
       });
       const sub = typeof payload.sub === 'string' ? payload.sub : '';
-      const scopeStr = typeof payload['scope'] === 'string' ? payload['scope'] : '';
-      const tnt = typeof payload['act.tnt'] === 'string' ? payload['act.tnt'] : '';
+      const email = typeof payload['email'] === 'string' ? (payload['email'] as string) : '';
       if (!sub) throw new OAuthVerificationError('missing sub claim');
-      if (!tnt) throw new OAuthVerificationError('missing act.tnt claim');
       return {
         subject: sub,
-        scopes: scopeStr ? scopeStr.split(' ').filter(Boolean) : [],
-        tenantId: tnt,
+        email,
         expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 60_000),
       };
     } catch (err) {

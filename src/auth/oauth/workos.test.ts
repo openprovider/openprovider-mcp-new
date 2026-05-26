@@ -39,11 +39,10 @@ describe('workos verifier', () => {
       issuer: 'https://api.workos.com',
       jwksUri: 'https://api.workos.com/sso/jwks/client_test',
     });
-    const t = await token({ sub: 'user_123', scope: 'mcp:read mcp:write', 'act.tnt': 'tnt_a' });
+    const t = await token({ sub: 'user_123', email: 'user@example.com' });
     const claims = await verify(t);
     expect(claims.subject).toBe('user_123');
-    expect(claims.scopes).toEqual(['mcp:read', 'mcp:write']);
-    expect(claims.tenantId).toBe('tnt_a');
+    expect(claims.email).toBe('user@example.com');
   });
 
   it('rejects an expired token', async () => {
@@ -78,14 +77,16 @@ describe('workos verifier', () => {
     await expect(verify(t)).rejects.toBeInstanceOf(OAuthVerificationError);
   });
 
-  it('rejects a token without act.tnt claim', async () => {
+  it('accepts a token without act.tnt and returns subject + email', async () => {
     mockJwks('https://api.workos.com/sso/jwks/client_test');
     const verify = createWorkOsVerifier({
       clientId: 'client_test',
       issuer: 'https://api.workos.com',
       jwksUri: 'https://api.workos.com/sso/jwks/client_test',
     });
-    const t = await token({ sub: 'u', scope: 'mcp:read' });
-    await expect(verify(t)).rejects.toBeInstanceOf(OAuthVerificationError);
+    const t = await token({ sub: 'user_123', email: 'a@example.com' });
+    const claims = await verify(t);
+    expect(claims.subject).toBe('user_123');
+    expect(claims.email).toBe('a@example.com');
   });
 });
