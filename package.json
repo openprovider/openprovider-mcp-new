@@ -37,6 +37,7 @@
     "@opentelemetry/exporter-trace-otlp-grpc": "^0.55.0",
     "@opentelemetry/sdk-node": "^0.55.0",
     "@workos-inc/node": "^9.3.1",
+    "argon2": "^0.44.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.36.0",
     "fastify": "^4.28.1",
