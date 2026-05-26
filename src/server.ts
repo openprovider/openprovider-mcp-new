@@ -16,6 +16,17 @@ import { createListContactsTool } from './tools/list-contacts.js';
 import { createGetContactTool } from './tools/get-contact.js';
 import { createListPendingConfirmationsTool } from './tools/list-pending-confirmations.js';
 import { createConfirmPendingTool } from './tools/confirm-pending.js';
+import { createRegisterDomainTool } from './tools/register-domain.js';
+import { createUpdateDomainTool } from './tools/update-domain.js';
+import { createCreateContactTool } from './tools/create-contact.js';
+import { createUpdateContactTool } from './tools/update-contact.js';
+import { createDeleteContactTool } from './tools/delete-contact.js';
+import {
+  claimConfirmation,
+  unclaimConfirmation,
+  withIdempotency,
+  idempotencyKeyFor,
+} from './policies/idempotency.js';
 import { createOpenproviderClient } from './openprovider/client.js';
 import { createOpenproviderTokenManager } from './openprovider/token-manager.js';
 import { createPgTokenCache } from './openprovider/token-cache-pg.js';
@@ -243,27 +254,53 @@ async function main(): Promise<void> {
           };
         },
 
-        // Path 1 consume: validates, returns confirmationId for the dispatcher to settle.
+        // Path 1 consume: validates, atomically claims, returns confirmationId for dispatcher to settle.
         consume: async ({ token, args, principal: p }) => {
           const validated = await validateConfirmation(token, args, p);
           if (validated.kind === 'error') return validated;
+          const won = await claimConfirmation(client, validated.conf.id);
+          if (!won) return { kind: 'error', code: 'confirmation_not_found' };
           return { kind: 'ok', confirmationId: validated.conf.id };
         },
 
         settle: async (confirmationId, outcome) => {
+          if (outcome === 'released') await unclaimConfirmation(client, confirmationId);
           await settleConfirmation(client, confirmationId, outcome);
         },
       };
 
-      // Build the base tools array first (Phase-3 tools + list_pending_confirmations).
+      // Build the base tools array first (Phase-3 tools + write tools + list_pending_confirmations).
       // confirm_pending is pushed in a second step so its consume closure can reference
       // the now-populated tools array without a forward-reference problem.
+
+      // create_contact (allow-mode) is wrapped with withIdempotency for dedup.
+      // Confirm-mode write tools do NOT get withIdempotency — the claim is the correctness guarantee.
+      const createContactTool = createCreateContactTool({
+        client: openproviderClient,
+        tokenManager,
+      });
+      const wrappedCreateContact: DispatcherTool = {
+        ...createContactTool,
+        handler: async (args: unknown, p: Principal): Promise<unknown> => {
+          const key = idempotencyKeyFor('create_contact', args, p.tenantId);
+          const { result } = await withIdempotency(client, p.tenantId, key, 'create_contact', () =>
+            createContactTool.handler(args, p),
+          );
+          return result;
+        },
+      };
+
       const tools: DispatcherTool[] = [
         createCheckDomainTool({ client: openproviderClient, tokenManager }),
         createListDomainsTool({ client: openproviderClient, tokenManager }),
         createGetDomainTool({ client: openproviderClient, tokenManager }),
         createListContactsTool({ client: openproviderClient, tokenManager }),
         createGetContactTool({ client: openproviderClient, tokenManager }),
+        createRegisterDomainTool({ client: openproviderClient, tokenManager }),
+        createUpdateDomainTool({ client: openproviderClient, tokenManager }),
+        wrappedCreateContact,
+        createUpdateContactTool({ client: openproviderClient, tokenManager }),
+        createDeleteContactTool({ client: openproviderClient, tokenManager }),
         createListPendingConfirmationsTool({ getClient: () => client }),
       ];
 
@@ -288,12 +325,19 @@ async function main(): Promise<void> {
           return { kind: 'error', code: 'tool_not_found' };
         }
 
+        // Atomic claim — prevents concurrent double-execution of a billable/destructive op.
+        const won = await claimConfirmation(client, conf.id);
+        if (!won) return { kind: 'error', code: 'confirmation_not_found' }; // already claimed/consumed
+
         // Execute the original tool's handler and settle.
         try {
           const result = await originalTool.handler(input.args, input.principal);
+          // The claim already set consumed_at; committed also records it — harmless.
           await settleConfirmation(client, conf.id, 'committed');
           return { kind: 'ok', result };
         } catch (err) {
+          // Un-claim so a transient failure leaves the confirmation re-approvable.
+          await unclaimConfirmation(client, conf.id);
           await settleConfirmation(client, conf.id, 'released');
           const code = (err as { code?: string }).code ?? 'upstream_error';
           return { kind: 'error', code };
