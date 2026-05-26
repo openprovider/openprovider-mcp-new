@@ -38,16 +38,7 @@ describe('identity resolver', () => {
     await expect(resolve('Bearer op_live_xxx')).rejects.toThrow(/api key.*phase/i);
   });
 
-  it('resolves a real OAuth bearer to a user Principal', async () => {
-    const fakeVerifier = (token: string) => {
-      if (token !== 'oauth_real') return Promise.reject(new Error('nope'));
-      return Promise.resolve({
-        subject: 'user_42',
-        scopes: ['mcp:read'],
-        tenantId: 'tnt_xyz',
-        expiresAt: new Date(Date.now() + 60_000),
-      });
-    };
+  it('resolves a verified token to a Principal via resolveTenant (role from DB)', async () => {
     const resolve2 = createIdentityResolver({
       devToken: 'dev-bearer',
       devPrincipal: {
@@ -58,19 +49,28 @@ describe('identity resolver', () => {
         scopes: [],
         role: 'owner',
       },
-      verifier: fakeVerifier,
+      verifier: (token) =>
+        token === 'good'
+          ? Promise.resolve({
+              subject: 'user_42',
+              email: 'x@y.z',
+              expiresAt: new Date(Date.now() + 60_000),
+            })
+          : Promise.reject(new Error('bad')),
+      resolveTenant: (_subject) =>
+        Promise.resolve({ tenantId: 'tnt_db', userId: 'usr_db', role: 'operator' as const }),
     });
-    const p = await resolve2('Bearer oauth_real');
+    const p = await resolve2('Bearer good');
     expect(p?.kind).toBe('user');
     if (p?.kind === 'user') {
       expect(p.subject).toBe('user_42');
-      expect(p.tenantId).toBe('tnt_xyz');
-      expect(p.scopes).toEqual(['mcp:read']);
+      expect(p.tenantId).toBe('tnt_db');
+      expect(p.role).toBe('operator');
+      expect(p.scopes).toEqual([]);
     }
   });
 
-  it('returns null when verifier rejects', async () => {
-    const fakeVerifier = () => Promise.reject(new Error('bad'));
+  it('returns null when the verifier rejects', async () => {
     const resolve2 = createIdentityResolver({
       devToken: 'dev-bearer',
       devPrincipal: {
@@ -81,8 +81,9 @@ describe('identity resolver', () => {
         scopes: [],
         role: 'owner',
       },
-      verifier: fakeVerifier,
+      verifier: () => Promise.reject(new Error('bad')),
+      resolveTenant: () => Promise.reject(new Error('should not be called')),
     });
-    expect(await resolve2('Bearer some_bad_token')).toBeNull();
+    expect(await resolve2('Bearer whatever')).toBeNull();
   });
 });

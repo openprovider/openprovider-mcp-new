@@ -37,7 +37,7 @@ export function createWorkOsVerifier(config: WorkOsVerifierConfig): AccessTokenV
         algorithms: ['RS256'],
       });
       const sub = typeof payload.sub === 'string' ? payload.sub : '';
-      const email = typeof payload['email'] === 'string' ? (payload['email'] as string) : '';
+      const email = typeof payload['email'] === 'string' ? payload['email'] : '';
       if (!sub) throw new OAuthVerificationError('missing sub claim');
       return {
         subject: sub,

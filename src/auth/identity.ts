@@ -1,10 +1,12 @@
 import type { Principal } from './principal.js';
 import type { AccessTokenVerifier } from './oauth/workos.js';
+import type { TenantResolver } from './tenant-resolver.js';
 
 export interface IdentityResolverConfig {
   devToken: string;
   devPrincipal: Principal;
   verifier?: AccessTokenVerifier;
+  resolveTenant?: TenantResolver;
 }
 
 export type IdentityResolver = (
@@ -22,20 +24,23 @@ export function createIdentityResolver(config: IdentityResolverConfig): Identity
     if (token.startsWith('op_live_')) {
       throw new Error('API key authentication lands in phase 6');
     }
-    if (config.verifier) {
+    if (config.verifier && config.resolveTenant) {
+      let claims;
       try {
-        const claims = await config.verifier(token);
-        return {
-          kind: 'user',
-          tenantId: claims.tenantId,
-          userId: claims.subject,
-          subject: claims.subject,
-          scopes: claims.scopes,
-          role: claims.scopes.includes('mcp:write') ? 'operator' : 'viewer',
-        };
+        claims = await config.verifier(token);
       } catch {
-        return null;
+        return null; // invalid token → 401
       }
+      // resolveTenant failure is a server error, not an auth failure — let it throw.
+      const resolution = await config.resolveTenant(claims.subject, claims.email);
+      return {
+        kind: 'user',
+        tenantId: resolution.tenantId,
+        userId: resolution.userId,
+        subject: claims.subject,
+        scopes: [],
+        role: resolution.role,
+      };
     }
     return null;
   };
