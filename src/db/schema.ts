@@ -112,6 +112,17 @@ export const confirmations = pgTable('confirmations', {
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
 });
 
+export const idempotencyRecords = pgTable('idempotency_records', {
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  key: text('key').notNull(),
+  toolName: text('tool_name').notNull(),
+  resultJson: jsonb('result_json').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
 export const spendReservations = pgTable('spend_reservations', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id')
