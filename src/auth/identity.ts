@@ -36,6 +36,9 @@ export function createIdentityResolver(config: IdentityResolverConfig): Identity
       }
       // resolveTenant failure is a server error, not an auth failure — let it throw.
       const resolution = await config.resolveTenant(claims.subject, claims.email);
+      if (resolution.status !== 'resolved') {
+        return null; // pending invite not yet accepted → 401 on /mcp; accept via dashboard first
+      }
       return {
         kind: 'user',
         tenantId: resolution.tenantId,

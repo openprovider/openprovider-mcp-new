@@ -100,7 +100,7 @@ describe('identity resolver', () => {
             })
           : Promise.reject(new Error('bad')),
       resolveTenant: (_subject) =>
-        Promise.resolve({ tenantId: 'tnt_db', userId: 'usr_db', role: 'operator' as const }),
+        Promise.resolve({ status: 'resolved' as const, tenantId: 'tnt_db', userId: 'usr_db', role: 'operator' as const }),
     });
     const p = await resolve2('Bearer good');
     expect(p?.kind).toBe('user');
@@ -127,5 +127,15 @@ describe('identity resolver', () => {
       resolveTenant: () => Promise.reject(new Error('should not be called')),
     });
     expect(await resolve2('Bearer whatever')).toBeNull();
+  });
+
+  it('returns null (401) when resolveTenant signals a pending invite', async () => {
+    const resolve = createIdentityResolver({
+      devToken: 'dev',
+      devPrincipal: { kind: 'user', tenantId: 't', userId: 'u', subject: 's', scopes: [], role: 'viewer' },
+      verifier: async () => ({ subject: 'sub_pending', email: 'p@example.com', expiresAt: new Date(Date.now() + 1000) }),
+      resolveTenant: async () => ({ status: 'pending_invite' }),
+    });
+    expect(await resolve('Bearer sometoken')).toBeNull();
   });
 });
