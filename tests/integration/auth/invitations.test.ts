@@ -151,4 +151,124 @@ describe('migration 0012 invitations', () => {
     expect(res.status).toBe('resolved');
     expect(res.role).toBe('owner');
   });
+
+  async function accept(token: string, subject: string, email: string) {
+    const c = await pool.connect();
+    try {
+      await c.query('SET ROLE app_role');
+      const r = await c.query<{ status: string; tenant_id: string | null; role: string | null }>(
+        'SELECT * FROM accept_invitation($1,$2,$3)',
+        [token, subject, email],
+      );
+      return r.rows[0]!;
+    } finally {
+      await c.query('RESET ROLE');
+      c.release();
+    }
+  }
+
+  it('accept joins the invited tenant with the invited role (token tok-1 / invitee@example.com)', async () => {
+    const res = await accept('tok-1', 'invitee_accept_sub', 'invitee@example.com');
+    expect(res.status).toBe('accepted');
+    expect(res.tenant_id).toBe(tenantId);
+    expect(res.role).toBe('operator');
+  });
+
+  it('accept rejects a second use of the same token as already_accepted', async () => {
+    const res = await accept('tok-1', 'someone_else_sub', 'invitee@example.com');
+    expect(res.status).toBe('already_accepted');
+  });
+
+  it('accept rejects an unknown token', async () => {
+    const res = await accept('does-not-exist', 'x_sub', 'x@example.com');
+    expect(res.status).toBe('invalid_token');
+  });
+
+  it('accept rejects when the verified email does not match the invite', async () => {
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
+         VALUES ($1, 'mismatch@example.com', 'viewer', 'tok-mismatch', now() + interval '7 days')`,
+        [tenantId],
+      );
+    });
+    const res = await accept('tok-mismatch', 'mismatch_sub', 'attacker@example.com');
+    expect(res.status).toBe('email_mismatch');
+  });
+
+  it('accept rejects an expired invite', async () => {
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
+         VALUES ($1, 'expired@example.com', 'viewer', 'tok-expired', now() - interval '1 hour')`,
+        [tenantId],
+      );
+    });
+    const res = await accept('tok-expired', 'expired_sub', 'expired@example.com');
+    expect(res.status).toBe('expired');
+  });
+
+  it('accept rejects a subject that is already a user (already_member)', async () => {
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
+         VALUES ($1, 'dup@example.com', 'viewer', 'tok-dup', now() + interval '7 days')`,
+        [tenantId],
+      );
+    });
+    const res = await accept('tok-dup', 'inv_owner_sub', 'dup@example.com');
+    expect(res.status).toBe('already_member');
+  });
+
+  it('concurrent accept of one token creates exactly one user', async () => {
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
+         VALUES ($1, 'race@example.com', 'viewer', 'tok-race', now() + interval '7 days')`,
+        [tenantId],
+      );
+    });
+    const results = await Promise.all([
+      accept('tok-race', 'race_sub', 'race@example.com'),
+      accept('tok-race', 'race_sub', 'race@example.com'),
+    ]);
+    const accepted = results.filter((r) => r.status === 'accepted');
+    expect(accepted).toHaveLength(1);
+    const c = await pool.connect();
+    try {
+      await c.query('RESET ROLE');
+      const r = await c.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM users WHERE oauth_subject = 'race_sub'`,
+      );
+      expect(r.rows[0]!.count).toBe('1');
+    } finally {
+      c.release();
+    }
+  });
+
+  it('concurrent accept of one token by two different subjects creates exactly one user', async () => {
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
+         VALUES ($1, 'race2@example.com', 'viewer', 'tok-race2', now() + interval '7 days')`,
+        [tenantId],
+      );
+    });
+    const results = await Promise.all([
+      accept('tok-race2', 'race2_sub_a', 'race2@example.com'),
+      accept('tok-race2', 'race2_sub_b', 'race2@example.com'),
+    ]);
+    const accepted = results.filter((r) => r.status === 'accepted');
+    expect(accepted).toHaveLength(1);
+    const c = await pool.connect();
+    try {
+      await c.query('RESET ROLE');
+      const r = await c.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM users WHERE oauth_subject IN ('race2_sub_a','race2_sub_b')`,
+      );
+      expect(r.rows[0]!.count).toBe('1');
+    } finally {
+      c.release();
+    }
+  });
 });

@@ -76,3 +76,56 @@ $$;
 
 REVOKE ALL ON FUNCTION resolve_or_provision_tenant(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION resolve_or_provision_tenant(text, text) TO app_role;
+
+CREATE FUNCTION accept_invitation(p_token text, p_subject text, p_email text)
+  RETURNS TABLE (status text, tenant_id uuid, user_id uuid, role text)
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+AS $$
+DECLARE
+  v_inv invitations%ROWTYPE;
+  v_uid uuid;
+BEGIN
+  -- A subject already mapped to a user belongs to exactly one tenant; reject.
+  IF EXISTS (SELECT 1 FROM users u WHERE u.oauth_subject = p_subject) THEN
+    RETURN QUERY SELECT 'already_member'::text, NULL::uuid, NULL::uuid, NULL::text;
+    RETURN;
+  END IF;
+
+  SELECT * INTO v_inv FROM invitations WHERE token = p_token;
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT 'invalid_token'::text, NULL::uuid, NULL::uuid, NULL::text;
+    RETURN;
+  END IF;
+  IF v_inv.accepted_at IS NOT NULL THEN
+    RETURN QUERY SELECT 'already_accepted'::text, NULL::uuid, NULL::uuid, NULL::text;
+    RETURN;
+  END IF;
+  IF v_inv.expires_at <= now() THEN
+    RETURN QUERY SELECT 'expired'::text, NULL::uuid, NULL::uuid, NULL::text;
+    RETURN;
+  END IF;
+  IF lower(v_inv.email) <> lower(p_email) THEN
+    RETURN QUERY SELECT 'email_mismatch'::text, NULL::uuid, NULL::uuid, NULL::text;
+    RETURN;
+  END IF;
+
+  -- Atomically claim: only one concurrent caller flips accepted_at.
+  UPDATE invitations SET accepted_at = now()
+    WHERE id = v_inv.id AND accepted_at IS NULL;
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT 'already_accepted'::text, NULL::uuid, NULL::uuid, NULL::text;
+    RETURN;
+  END IF;
+
+  INSERT INTO users (tenant_id, email, oauth_subject, role)
+    VALUES (v_inv.tenant_id, NULLIF(p_email, ''), p_subject, v_inv.role)
+    RETURNING id INTO v_uid;
+
+  RETURN QUERY SELECT 'accepted'::text, v_inv.tenant_id, v_uid, v_inv.role;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION accept_invitation(text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION accept_invitation(text, text, text) TO app_role;
