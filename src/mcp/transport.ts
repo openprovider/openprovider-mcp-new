@@ -6,8 +6,6 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMcpSdkServer, type ToolEntry } from './sdk-transport.js';
 import { createIdentityResolver } from '../auth/identity.js';
 import type { Principal } from '../auth/principal.js';
-import type { AccessTokenVerifier } from '../auth/oauth/workos.js';
-import type { TenantResolver } from '../auth/tenant-resolver.js';
 import type { ApiKeyResolver } from '../auth/api-key.js';
 import { withRequestContext } from '../observability/request-context.js';
 import { randomUUID } from 'node:crypto';
@@ -36,8 +34,6 @@ export interface McpServerConfig {
     scopesSupported: string[];
   };
   tools?: ToolEntry[];
-  verifier?: AccessTokenVerifier;
-  resolveTenant?: TenantResolver;
   apiKeyResolver?: ApiKeyResolver;
   /**
    * Factory invoked per `tools/call` request. Receives the principal and returns a fully-wired
@@ -55,8 +51,6 @@ export async function createMcpServer(config: McpServerConfig): Promise<FastifyI
   const resolve = createIdentityResolver({
     devToken: config.devToken,
     devPrincipal: config.devPrincipal,
-    ...(config.verifier !== undefined ? { verifier: config.verifier } : {}),
-    ...(config.resolveTenant !== undefined ? { resolveTenant: config.resolveTenant } : {}),
     ...(config.apiKeyResolver !== undefined ? { apiKeyResolver: config.apiKeyResolver } : {}),
   });
 

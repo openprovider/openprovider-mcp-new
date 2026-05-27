@@ -1,13 +1,9 @@
 import type { Principal } from './principal.js';
-import type { AccessTokenVerifier } from './oauth/workos.js';
-import type { TenantResolver } from './tenant-resolver.js';
 import type { ApiKeyResolver } from './api-key.js';
 
 export interface IdentityResolverConfig {
   devToken: string;
   devPrincipal: Principal;
-  verifier?: AccessTokenVerifier;
-  resolveTenant?: TenantResolver;
   apiKeyResolver?: ApiKeyResolver;
 }
 
@@ -26,27 +22,6 @@ export function createIdentityResolver(config: IdentityResolverConfig): Identity
     if (token.startsWith('op_live_')) {
       if (!config.apiKeyResolver) return null;
       return config.apiKeyResolver(token);
-    }
-    if (config.verifier && config.resolveTenant) {
-      let claims;
-      try {
-        claims = await config.verifier(token);
-      } catch {
-        return null; // invalid token → 401
-      }
-      // resolveTenant failure is a server error, not an auth failure — let it throw.
-      const resolution = await config.resolveTenant(claims.subject, claims.email);
-      if (resolution.status !== 'resolved') {
-        return null; // pending invite not yet accepted → 401 on /mcp; accept via dashboard first
-      }
-      return {
-        kind: 'user',
-        tenantId: resolution.tenantId,
-        userId: resolution.userId,
-        subject: claims.subject,
-        scopes: [],
-        role: resolution.role,
-      };
     }
     return null;
   };
