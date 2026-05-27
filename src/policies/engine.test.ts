@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { evaluate } from './engine.js';
+import { evaluate, resolveToolMode, isReadTool } from './engine.js';
 import { DEFAULT_POLICY, type PolicyDoc } from './schema.js';
 
 const base = {
@@ -119,5 +119,32 @@ describe('policies/engine', () => {
         return d.decision === 'deny';
       }),
     );
+  });
+});
+
+describe('resolveToolMode', () => {
+  it('viewer may run an allow-mode read tool', () => {
+    expect(resolveToolMode(DEFAULT_POLICY, 'check_domain', 'viewer')).toBe('allow');
+    expect(resolveToolMode(DEFAULT_POLICY, 'list_domains', 'viewer')).toBe('allow');
+  });
+
+  it('viewer is denied an allow-mode WRITE tool (the gap)', () => {
+    expect(resolveToolMode(DEFAULT_POLICY, 'create_contact', 'viewer')).toBe('deny');
+  });
+
+  it('viewer is denied a confirm-mode tool', () => {
+    expect(resolveToolMode(DEFAULT_POLICY, 'register_domain', 'viewer')).toBe('deny');
+  });
+
+  it('operator/admin/owner keep the policy mode for writes', () => {
+    expect(resolveToolMode(DEFAULT_POLICY, 'create_contact', 'operator')).toBe('allow');
+    expect(resolveToolMode(DEFAULT_POLICY, 'create_contact', 'admin')).toBe('allow');
+    expect(resolveToolMode(DEFAULT_POLICY, 'register_domain', 'operator')).toBe('confirm');
+    expect(resolveToolMode(DEFAULT_POLICY, 'register_domain', 'owner')).toBe('confirm');
+  });
+
+  it('isReadTool identifies read tools', () => {
+    expect(isReadTool('check_domain')).toBe(true);
+    expect(isReadTool('create_contact')).toBe(false);
   });
 });

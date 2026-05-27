@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createDispatcher, DispatchError, type AuditRow } from './dispatch.js';
 import type { Principal } from '../auth/principal.js';
+import { resolveToolMode } from '../policies/engine.js';
+import { DEFAULT_POLICY } from '../policies/schema.js';
 
 const principal: Principal = {
   kind: 'user',
@@ -240,5 +242,71 @@ describe('mcp dispatch', () => {
     });
     await dispatch({ name: 'reg', args: { d: 'a.com' }, principal, confirm: { token: 'ct1' } });
     expect(settle).toHaveBeenCalledWith('cf1', 'committed');
+  });
+});
+
+describe('viewer RBAC via resolveToolMode (gap closure)', () => {
+  const viewer: Principal = {
+    kind: 'user',
+    tenantId: 't1',
+    userId: 'u1',
+    subject: 's1',
+    scopes: [],
+    role: 'viewer',
+  };
+
+  function makeDispatch(handlerCalled: { value: boolean }) {
+    return createDispatcher({
+      audit: () => Promise.resolve(),
+      tools: [
+        {
+          name: 'create_contact',
+          description: 'write tool',
+          inputSchema: z.object({}).passthrough(),
+          handler: () => {
+            handlerCalled.value = true;
+            return Promise.resolve({ created: true });
+          },
+        },
+        {
+          name: 'check_domain',
+          description: 'read tool',
+          inputSchema: z.object({}).passthrough(),
+          handler: () => {
+            handlerCalled.value = true;
+            return Promise.resolve({ available: true });
+          },
+        },
+      ],
+      confirm: {
+        resolveMode: (toolName, p) =>
+          Promise.resolve(
+            resolveToolMode(
+              DEFAULT_POLICY,
+              toolName,
+              p.kind === 'user' ? p.role : p.scopes.includes('mcp:write') ? 'operator' : 'viewer',
+            ),
+          ),
+        propose: () => Promise.resolve({ kind: 'denied', reason: 'should not be reached' }),
+        consume: () => Promise.resolve({ kind: 'ok', confirmationId: 'cf1' }),
+      },
+    });
+  }
+
+  it('viewer calling allow-mode WRITE tool (create_contact) is denied with policy_denied; handler does NOT run', async () => {
+    const handlerCalled = { value: false };
+    const dispatch = makeDispatch(handlerCalled);
+    await expect(
+      dispatch({ name: 'create_contact', args: {}, principal: viewer }),
+    ).rejects.toMatchObject({ code: 'policy_denied' });
+    expect(handlerCalled.value).toBe(false);
+  });
+
+  it('viewer calling allow-mode READ tool (check_domain) succeeds; handler runs', async () => {
+    const handlerCalled = { value: false };
+    const dispatch = makeDispatch(handlerCalled);
+    const result = await dispatch({ name: 'check_domain', args: {}, principal: viewer });
+    expect(result).toEqual({ available: true });
+    expect(handlerCalled.value).toBe(true);
   });
 });

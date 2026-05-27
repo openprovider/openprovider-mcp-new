@@ -54,8 +54,8 @@ import {
   settleConfirmation,
   canonicalArgsHash,
 } from './policies/repo.js';
-import { evaluate } from './policies/engine.js';
-import { toolMode, requiredApproverRoles, type Role } from './policies/schema.js';
+import { evaluate, resolveToolMode } from './policies/engine.js';
+import { requiredApproverRoles, type Role } from './policies/schema.js';
 import { createPricing, DRIFT_TOLERANCE } from './policies/pricing.js';
 import { centsToEur } from './policies/money.js';
 import type { LoadedConfirmation } from './policies/repo.js';
@@ -208,7 +208,13 @@ async function main(): Promise<void> {
           // not billable domain actions, and should never be denied by the policy engine.
           if (META_TOOLS.has(toolName)) return 'allow';
           const policy = await getPolicy(client, principal.tenantId);
-          return toolMode(policy, toolName);
+          const callerRole: Role =
+            principal.kind === 'user'
+              ? principal.role
+              : principal.scopes.includes('mcp:write')
+                ? 'operator'
+                : 'viewer';
+          return resolveToolMode(policy, toolName, callerRole);
         },
 
         propose: async ({ toolName, args, principal: p }) => {

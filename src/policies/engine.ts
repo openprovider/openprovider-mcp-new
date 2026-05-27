@@ -24,6 +24,28 @@ const READ_TOOLS = new Set([
   'list_pending_confirmations',
 ]);
 
+export function isReadTool(toolName: string): boolean {
+  return READ_TOOLS.has(toolName);
+}
+
+/**
+ * Role-aware tool mode: the policy's mode for the tool, narrowed to 'deny' when the
+ * caller's role may not run it. A viewer may only run allow-mode READ tools; any other
+ * tool a viewer attempts is denied. This is the single gate the allow-mode dispatch path
+ * (resolveMode) and the confirm-mode propose path (evaluate) must agree on — without it,
+ * allow-mode write tools (e.g. create_contact) would bypass the viewer restriction.
+ */
+export function resolveToolMode(
+  policy: PolicyDoc,
+  toolName: string,
+  role: Role,
+): 'allow' | 'confirm' | 'deny' {
+  const mode = toolMode(policy, toolName);
+  if (mode === 'deny') return 'deny';
+  if (role === 'viewer' && !(mode === 'allow' && isReadTool(toolName))) return 'deny';
+  return mode;
+}
+
 export function evaluate(input: EvaluateInput): Decision {
   const mode = toolMode(input.policy, input.toolName);
   if (mode === 'deny') return { decision: 'deny', reason: 'tool_not_permitted' };
