@@ -14,6 +14,14 @@ import {
   UpdateDomainArgs,
   CreateContactArgs,
   UpdateContactArgs,
+  SuggestDomainArgs,
+  ResetAuthcodeArgs,
+  ApproveTransferArgs,
+  RenewDomainArgs,
+  TransferDomainArgs,
+  TradeDomainArgs,
+  RestoreDomainArgs,
+  RestartDomainOperationArgs,
 } from './types.js';
 
 export interface OpenproviderClientConfig {
@@ -52,6 +60,17 @@ export interface OpenproviderClient {
     idempotencyKey?: string,
   ): Promise<unknown>;
   deleteContact(token: string, id: number, idempotencyKey?: string): Promise<unknown>;
+  suggestDomain(token: string, args: SuggestDomainArgs): Promise<unknown>;
+  getDomainAuthcode(token: string, id: number): Promise<unknown>;
+  resetDomainAuthcode(token: string, args: ResetAuthcodeArgs): Promise<unknown>;
+  approveDomainTransfer(token: string, args: ApproveTransferArgs): Promise<unknown>;
+  sendFoa1DomainTransfer(token: string, id: number): Promise<unknown>;
+  deleteDomain(token: string, id: number): Promise<unknown>;
+  restartDomainOperation(token: string, args: RestartDomainOperationArgs): Promise<unknown>;
+  renewDomain(token: string, args: RenewDomainArgs): Promise<unknown>;
+  transferDomain(token: string, args: TransferDomainArgs): Promise<unknown>;
+  tradeDomain(token: string, args: TradeDomainArgs): Promise<unknown>;
+  restoreDomain(token: string, args: RestoreDomainArgs): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -185,6 +204,63 @@ export function createOpenproviderClient(
     async deleteContact(token, id, idempotencyKey) {
       const headers = idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : undefined;
       const body = await request('DELETE', `/contacts/${id}`, token, undefined, headers);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async suggestDomain(token, args) {
+      const parsed = SuggestDomainArgs.parse(args);
+      const body = await request('POST', '/domains/suggest-name', token, parsed);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async getDomainAuthcode(token, id) {
+      const body = await request('GET', `/domains/${id}/authcode`, token);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async resetDomainAuthcode(token, args) {
+      const parsed = ResetAuthcodeArgs.parse(args);
+      const body = await request('POST', `/domains/${parsed.id}/authcode/reset`, token, parsed);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async approveDomainTransfer(token, args) {
+      const parsed = ApproveTransferArgs.parse(args);
+      const body = await request('POST', `/domains/${parsed.id}/transfer/approve`, token, parsed);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async sendFoa1DomainTransfer(token, id) {
+      const body = await request('POST', `/domains/${id}/transfer/send-foa1`, token, { id });
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async deleteDomain(token, id) {
+      const body = await request('DELETE', `/domains/${id}`, token);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async restartDomainOperation(token, args) {
+      const parsed = RestartDomainOperationArgs.parse(args);
+      const body = await request(
+        'POST',
+        `/domains/${parsed.id}/last-operation/restart`,
+        token,
+        parsed,
+      );
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async renewDomain(token, args) {
+      const parsed = RenewDomainArgs.parse(args);
+      const body = await request('POST', `/domains/${parsed.id}/renew`, token, parsed);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async transferDomain(token, args) {
+      const parsed = TransferDomainArgs.parse(args);
+      const body = await request('POST', '/domains/transfer', token, parsed);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async tradeDomain(token, args) {
+      const parsed = TradeDomainArgs.parse(args);
+      const body = await request('POST', '/domains/trade', token, parsed);
+      return (body as { data?: unknown }).data ?? body;
+    },
+    async restoreDomain(token, args) {
+      const parsed = RestoreDomainArgs.parse(args);
+      const body = await request('POST', `/domains/${parsed.id}/restore`, token, parsed);
       return (body as { data?: unknown }).data ?? body;
     },
     async checkDomain(token, args) {

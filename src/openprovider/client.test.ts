@@ -149,3 +149,126 @@ describe('openprovider client — read endpoints', () => {
     await expect(client.getDomain('tok', 999)).rejects.toBeInstanceOf(OpenproviderClientError);
   });
 });
+
+describe('openprovider client — domain lifecycle methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('suggestDomain POSTs /domains/suggest-name and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/suggest-name`)
+      .reply(200, { data: { results: [] } });
+    const client = createOpenproviderClient();
+    expect(await client.suggestDomain('tok', { name: 'example' })).toEqual({ results: [] });
+  });
+
+  it('getDomainAuthcode GETs /domains/:id/authcode and unwraps data', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/domains/42/authcode`)
+      .reply(200, { data: { auth_code: 'ZZ' } });
+    const client = createOpenproviderClient();
+    expect(await client.getDomainAuthcode('tok', 42)).toEqual({ auth_code: 'ZZ' });
+  });
+
+  it('resetDomainAuthcode POSTs /domains/:id/authcode/reset and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/authcode/reset`, (b: Record<string, unknown>) => b['id'] === 42)
+      .reply(200, { data: { auth_code: 'NEW' } });
+    const client = createOpenproviderClient();
+    expect(await client.resetDomainAuthcode('tok', { id: 42 })).toEqual({ auth_code: 'NEW' });
+  });
+
+  it('approveDomainTransfer POSTs /domains/:id/transfer/approve and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/transfer/approve`, (b: Record<string, unknown>) => b['id'] === 42)
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.approveDomainTransfer('tok', { id: 42 })).toEqual({ success: true });
+  });
+
+  it('sendFoa1DomainTransfer POSTs /domains/:id/transfer/send-foa1 and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/transfer/send-foa1`)
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.sendFoa1DomainTransfer('tok', 42)).toEqual({ success: true });
+  });
+
+  it('deleteDomain DELETEs /domains/:id and unwraps data', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/domains/42`)
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.deleteDomain('tok', 42)).toEqual({ success: true });
+  });
+
+  it('restartDomainOperation POSTs /domains/:id/last-operation/restart and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/42/last-operation/restart`,
+        (b: Record<string, unknown>) => b['id'] === 42,
+      )
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.restartDomainOperation('tok', { id: 42 })).toEqual({ success: true });
+  });
+
+  it('renewDomain POSTs /domains/:id/renew and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/42/renew`,
+        (b: Record<string, unknown>) => b['id'] === 42 && b['period'] === 1,
+      )
+      .reply(200, { data: { id: 42 } });
+    const client = createOpenproviderClient();
+    expect(await client.renewDomain('tok', { id: 42, period: 1 })).toEqual({ id: 42 });
+  });
+
+  it('transferDomain POSTs /domains/transfer and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/transfer`,
+        (b: Record<string, unknown>) =>
+          (b['domain'] as Record<string, unknown>)['name'] === 'example' &&
+          b['auth_code'] === 'ABC',
+      )
+      .reply(200, { data: { id: 99 } });
+    const client = createOpenproviderClient();
+    expect(
+      await client.transferDomain('tok', {
+        domain: { name: 'example', extension: 'com' },
+        auth_code: 'ABC',
+        owner_handle: 'H1',
+      }),
+    ).toEqual({ id: 99 });
+  });
+
+  it('tradeDomain POSTs /domains/trade and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/trade`,
+        (b: Record<string, unknown>) =>
+          (b['domain'] as Record<string, unknown>)['name'] === 'example' &&
+          b['auth_code'] === 'XYZ',
+      )
+      .reply(200, { data: { id: 55 } });
+    const client = createOpenproviderClient();
+    expect(
+      await client.tradeDomain('tok', {
+        domain: { name: 'example', extension: 'com' },
+        auth_code: 'XYZ',
+        owner_handle: 'H2',
+      }),
+    ).toEqual({ id: 55 });
+  });
+
+  it('restoreDomain POSTs /domains/:id/restore and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/restore`, (b: Record<string, unknown>) => b['id'] === 42)
+      .reply(200, { data: { id: 42 } });
+    const client = createOpenproviderClient();
+    expect(await client.restoreDomain('tok', { id: 42 })).toEqual({ id: 42 });
+  });
+});

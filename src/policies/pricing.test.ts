@@ -22,6 +22,17 @@ function clientWith(price: { price: number; currency: string } | undefined, isPr
     createContact: vi.fn(),
     updateContact: vi.fn(),
     deleteContact: vi.fn(),
+    suggestDomain: vi.fn(),
+    getDomainAuthcode: vi.fn(),
+    resetDomainAuthcode: vi.fn(),
+    approveDomainTransfer: vi.fn(),
+    sendFoa1DomainTransfer: vi.fn(),
+    deleteDomain: vi.fn(),
+    restartDomainOperation: vi.fn(),
+    renewDomain: vi.fn(),
+    transferDomain: vi.fn(),
+    tradeDomain: vi.fn(),
+    restoreDomain: vi.fn(),
   };
 }
 
