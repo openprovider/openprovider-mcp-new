@@ -52,3 +52,15 @@ END;
 $$;
 REVOKE ALL ON FUNCTION signup_tenant(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION signup_tenant(text, text) TO app_role;
+
+CREATE FUNCTION find_user_by_email(p_email text)
+  RETURNS TABLE (user_id uuid, tenant_id uuid, role text, status text, password_hash text)
+  LANGUAGE sql SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT id, tenant_id, role, status, password_hash
+    FROM users
+   WHERE lower(email) = lower(p_email) AND status <> 'deleted'
+   LIMIT 1;
+$$;
+REVOKE ALL ON FUNCTION find_user_by_email(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION find_user_by_email(text) TO app_role;
