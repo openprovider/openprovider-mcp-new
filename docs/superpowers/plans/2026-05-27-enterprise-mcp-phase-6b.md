@@ -262,7 +262,7 @@ Expected: FAIL — `res.status` is `undefined` (current function has no `status`
 - [ ] **Step 3: Append the function replacement** to `migrations/0012_invitations.sql`:
 
 ```sql
-DROP FUNCTION resolve_or_provision_tenant(text, text);
+DROP FUNCTION IF EXISTS resolve_or_provision_tenant(text, text);
 
 CREATE FUNCTION resolve_or_provision_tenant(p_subject text, p_email text)
   RETURNS TABLE (status text, tenant_id uuid, user_id uuid, role text)
@@ -297,13 +297,18 @@ BEGIN
       v_new_tenant_id := gen_random_uuid();
       INSERT INTO tenants (id, name)
         VALUES (v_new_tenant_id, 'tenant for ' || p_subject);
+      INSERT INTO policies (tenant_id, doc)
+        VALUES (
+          v_new_tenant_id,
+          '{"version":1,"spend_caps":{"window":"month","limit_eur":0},"tld_allowlist":[],"tld_denylist":[],"tools":{"list_*":"allow","get_*":"allow","check_domain":"allow","register_domain":"confirm","update_domain":"confirm","delete_contact":"confirm","update_contact":"confirm","create_contact":"allow"},"ip_allowlist":[]}'::jsonb
+        );
       RETURN QUERY
         INSERT INTO users (tenant_id, email, oauth_subject, role)
         VALUES (v_new_tenant_id, NULLIF(p_email, ''), p_subject, 'owner')
         RETURNING 'resolved'::text, users.tenant_id, users.id, users.role;
       RETURN;
     EXCEPTION WHEN unique_violation THEN
-      -- lost the race; subtransaction rolled back. Loop.
+      -- lost the race; subtransaction (incl. tenants + policies) rolled back. Loop.
     END;
   END LOOP;
 END;

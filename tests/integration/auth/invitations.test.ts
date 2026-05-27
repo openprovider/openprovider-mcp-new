@@ -21,6 +21,7 @@ describe('migration 0012 invitations', () => {
       );
       tenantId = r.rows[0]!.tenant_id;
     } finally {
+      await c.query('RESET ROLE');
       c.release();
     }
   }, 60_000);
@@ -78,6 +79,7 @@ describe('migration 0012 invitations', () => {
       );
       tenant2 = r.rows[0]!.tenant_id;
     } finally {
+      await c.query('RESET ROLE');
       c.release();
     }
     const id = await runAsTenant(pool, tenant2, async (client) => {
@@ -90,5 +92,63 @@ describe('migration 0012 invitations', () => {
       return r.rows[0]!.id;
     });
     expect(id).toBeTruthy();
+  });
+
+  async function resolve(subject: string, email: string) {
+    const c = await pool.connect();
+    try {
+      await c.query('SET ROLE app_role');
+      const r = await c.query<{ status: string; tenant_id: string | null; role: string | null }>(
+        'SELECT * FROM resolve_or_provision_tenant($1,$2)',
+        [subject, email],
+      );
+      return r.rows[0]!;
+    } finally {
+      await c.query('RESET ROLE');
+      c.release();
+    }
+  }
+
+  it('resolve returns status=resolved + role=owner when provisioning a brand-new subject', async () => {
+    const res = await resolve('inv_fresh_sub', 'fresh@example.com');
+    expect(res.status).toBe('resolved');
+    expect(res.tenant_id).toBeTruthy();
+    expect(res.role).toBe('owner');
+    const pc = await pool.connect();
+    try {
+      await pc.query('RESET ROLE');
+      const pr = await pc.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM policies WHERE tenant_id = $1`,
+        [res.tenant_id],
+      );
+      expect(pr.rows[0]!.count).toBe('1');
+    } finally {
+      pc.release();
+    }
+  });
+
+  it('resolve returns pending_invite (no provision) when a pending invite matches the email', async () => {
+    // tenantId already has a pending invite for invitee@example.com (first test in this file).
+    const res = await resolve('invitee_new_sub', 'invitee@example.com');
+    expect(res.status).toBe('pending_invite');
+    expect(res.tenant_id).toBeNull();
+
+    const c = await pool.connect();
+    try {
+      await c.query('RESET ROLE');
+      const r = await c.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM users WHERE oauth_subject = $1`,
+        ['invitee_new_sub'],
+      );
+      expect(r.rows[0]!.count).toBe('0');
+    } finally {
+      c.release();
+    }
+  });
+
+  it('resolve still resolves an existing user even if a pending invite exists for their email', async () => {
+    const res = await resolve('inv_owner_sub', 'owner@example.com');
+    expect(res.status).toBe('resolved');
+    expect(res.role).toBe('owner');
   });
 });
