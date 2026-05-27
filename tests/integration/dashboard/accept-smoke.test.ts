@@ -27,9 +27,8 @@ describe('accept route smoke', () => {
     app = Fastify();
     await registerDashboard(app, {
       cookieSecret: SECRET,
-      buildAuthorizationUrl: () => 'https://auth.example.com/login',
-      authenticateWithCode: async () => ({ userId: 'u', email: 'p@example.com', subject: 'sub_p' }),
-      resolveTenant: async () => ({ status: 'pending_invite' }),
+      signup: async () => ({ status: 'email_taken' as const }),
+      login: async () => ({ ok: false as const }),
       registerPages: (pageApp) => registerAccept(pageApp, { pool }),
     });
     await app.ready();
@@ -42,7 +41,7 @@ describe('accept route smoke', () => {
   });
 
   it('GET /dashboard/accept with a pending session renders the form', async () => {
-    const s: DashboardSession = { tenantId: '', userId: '', subject: 'sub_p', role: 'viewer', csrf: 'c1', pending: true, email: 'p@example.com' };
+    const s: DashboardSession = { tenantId: '', userId: '', subject: 'sub_p', role: 'viewer', csrf: 'c1', email: 'p@example.com' };
     const res = await app.inject({ method: 'GET', url: '/dashboard/accept?token=abc', headers: { cookie: cookie(s) } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Accept Invitation');
@@ -50,7 +49,7 @@ describe('accept route smoke', () => {
   });
 
   it('POST /dashboard/accept with bad CSRF → 403', async () => {
-    const s: DashboardSession = { tenantId: '', userId: '', subject: 'sub_p', role: 'viewer', csrf: 'c1', pending: true, email: 'p@example.com' };
+    const s: DashboardSession = { tenantId: '', userId: '', subject: 'sub_p', role: 'viewer', csrf: 'c1', email: 'p@example.com' };
     const res = await app.inject({
       method: 'POST',
       url: '/dashboard/accept',

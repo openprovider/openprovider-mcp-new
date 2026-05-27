@@ -144,18 +144,8 @@ describe('dashboard pages-manage integration', () => {
 
     await registerDashboard(app, {
       cookieSecret: COOKIE_SECRET,
-      buildAuthorizationUrl: () => 'https://auth.example.com/login',
-      authenticateWithCode: async () => ({
-        userId: USER_ID,
-        email: 'manage@example.com',
-        subject: 'test-subject-manage',
-      }),
-      resolveTenant: async () => ({
-        status: 'resolved' as const,
-        tenantId: TENANT,
-        userId: USER_ID,
-        role: 'owner' as const,
-      }),
+      signup: async () => ({ status: 'email_taken' as const }),
+      login: async () => ({ ok: false as const }),
       registerPages: (pageApp) => {
         registerOverview(pageApp, { pool });
         registerOpenprovider(pageApp, { pool, kms, kmsKeyName });

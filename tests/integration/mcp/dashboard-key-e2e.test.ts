@@ -250,18 +250,8 @@ describe('phase 6 e2e: dashboard issue-key → authenticate /mcp → revoke → 
 
     await registerDashboard(app, {
       cookieSecret: COOKIE_SECRET,
-      buildAuthorizationUrl: () => 'https://auth.example.com/login',
-      authenticateWithCode: async () => ({
-        userId,
-        email: 'e2e-dk@example.com',
-        subject: 'e2e-dk-subject',
-      }),
-      resolveTenant: async () => ({
-        status: 'resolved' as const,
-        tenantId,
-        userId,
-        role: 'owner' as const,
-      }),
+      signup: async () => ({ status: 'email_taken' as const }),
+      login: async () => ({ ok: false as const }),
       registerPages: (pageApp) => {
         registerOverview(pageApp, { pool });
         registerOpenprovider(pageApp, { pool, kms, kmsKeyName });

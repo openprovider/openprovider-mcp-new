@@ -69,18 +69,8 @@ describe('dashboard users page', () => {
     app = Fastify();
     await registerDashboard(app, {
       cookieSecret: SECRET,
-      buildAuthorizationUrl: () => 'https://auth.example.com/login',
-      authenticateWithCode: async () => ({
-        userId: ownerUserId,
-        email: 'users-owner@example.com',
-        subject: 'users_owner',
-      }),
-      resolveTenant: async () => ({
-        status: 'resolved' as const,
-        tenantId,
-        userId: ownerUserId,
-        role: 'owner' as const,
-      }),
+      signup: async () => ({ status: 'email_taken' as const }),
+      login: async () => ({ ok: false as const }),
       registerPages: (pageApp) => {
         registerUsers(pageApp, { pool });
         registerAccept(pageApp, { pool });

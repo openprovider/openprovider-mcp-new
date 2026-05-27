@@ -8,9 +8,7 @@ export interface DashboardSession {
   subject: string;
   role: Role;
   csrf: string;
-  /** Pre-tenant marker: a logged-in invitee who has not yet accepted. */
-  pending?: boolean;
-  /** Verified WorkOS email — used by the accept page to list pending invites. */
+  /** Verified email — used by dashboard pages. */
   email?: string;
 }
 
@@ -62,8 +60,6 @@ export function clearSession(reply: FastifyReply): void {
 /**
  * Fastify preHandler: redirect to /dashboard/login when no valid session exists,
  * otherwise stash the session on req for downstream handlers.
- * A pending invitee (s.pending === true) is redirected to /dashboard/accept
- * unless already on that path.
  */
 export function requireSession(
   req: FastifyRequest,
@@ -75,18 +71,13 @@ export function requireSession(
     void reply.redirect('/dashboard/login');
     return;
   }
-  // A logged-in invitee who has not accepted is boxed into the accept flow.
-  if (s.pending && !req.url.startsWith('/dashboard/accept')) {
-    void reply.redirect('/dashboard/accept');
-    return;
-  }
   (req as FastifyRequest & { session?: DashboardSession }).session = s;
   done();
 }
 
 /**
  * preHandler factory: 403 when the session role is not in `allowed`.
- * Redirects unauthenticated users to login and pending invitees to accept.
+ * Redirects unauthenticated users to login.
  * Stashes the session on req like requireSession, so use it INSTEAD of requireSession.
  */
 export function requireRole(...allowed: Role[]) {
@@ -94,10 +85,6 @@ export function requireRole(...allowed: Role[]) {
     const s = readSession(req);
     if (!s) {
       void reply.redirect('/dashboard/login');
-      return;
-    }
-    if (s.pending) {
-      void reply.redirect('/dashboard/accept');
       return;
     }
     if (!allowed.includes(s.role)) {

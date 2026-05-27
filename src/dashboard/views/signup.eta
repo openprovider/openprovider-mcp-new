@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in — Openprovider MCP</title>
+  <title>Create account — Openprovider MCP</title>
   <style>
     body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
     .card { background: #fff; padding: 2rem 2.5rem; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); min-width: 320px; }
@@ -19,18 +19,18 @@
 </head>
 <body>
 <div class="card">
-  <h1>Sign in</h1>
+  <h1>Create account</h1>
   <% if (it.error) { %>
   <p class="error"><%= it.error %></p>
   <% } %>
-  <form method="POST" action="/dashboard/login">
+  <form method="POST" action="/dashboard/signup">
     <label for="email">Email</label>
     <input type="email" id="email" name="email" autocomplete="email" required>
     <label for="password">Password</label>
-    <input type="password" id="password" name="password" autocomplete="current-password" required>
-    <button type="submit">Sign in</button>
+    <input type="password" id="password" name="password" autocomplete="new-password" required>
+    <button type="submit">Create account</button>
   </form>
-  <p class="footer">No account? <a href="/dashboard/signup">Sign up</a></p>
+  <p class="footer">Already have an account? <a href="/dashboard/login">Sign in</a></p>
 </div>
 </body>
 </html>

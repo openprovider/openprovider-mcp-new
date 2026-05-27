@@ -7,7 +7,7 @@ import { Eta } from 'eta';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setSession, clearSession } from './session.js';
-import type { TenantResolution } from '../auth/tenant-resolver.js';
+import type { Role } from '../auth/roles.js';
 
 // Derive __dirname for ESM — works even if import.meta.dirname is undefined (Node <20.11).
 const __dirname =
@@ -15,16 +15,19 @@ const __dirname =
     ? import.meta.dirname
     : path.dirname(fileURLToPath(import.meta.url));
 
+export type SignupOutcome =
+  | { status: 'created'; tenantId: string; userId: string; role: Role; email: string }
+  | { status: 'email_taken' }
+  | { status: 'invalid_password' };
+
+export type LoginOutcome =
+  | { ok: true; tenantId: string; userId: string; role: Role; email: string }
+  | { ok: false };
+
 export interface DashboardDeps {
   cookieSecret: string;
-  /** Return the WorkOS hosted-login URL (no PKCE needed for this server-side flow). */
-  buildAuthorizationUrl: () => string;
-  /** Exchange the code for a user object (WorkOS userManagement.authenticateWithCode). */
-  authenticateWithCode: (
-    code: string,
-  ) => Promise<{ userId: string; email: string; subject: string }>;
-  /** Resolve (or provision) the tenant from WorkOS user identifiers. */
-  resolveTenant: (subject: string, email: string) => Promise<TenantResolution>;
+  signup: (email: string, password: string) => Promise<SignupOutcome>;
+  login: (email: string, password: string) => Promise<LoginOutcome>;
   /** Tasks 7–8 attach page routes via this hook. Pass a no-op for the scaffold alone. */
   registerPages: (app: FastifyInstance) => void;
 }
@@ -33,9 +36,11 @@ export interface DashboardDeps {
  * Register the dashboard onto the Fastify app.
  *
  * Mounts:
- *   GET  /dashboard/login           → redirect to WorkOS hosted login
- *   GET  /dashboard/login/callback  → exchange code, set session, redirect /dashboard
- *   POST /dashboard/logout          → clear session, redirect /dashboard/login
+ *   GET  /dashboard/login    → render email+password login form
+ *   POST /dashboard/login    → authenticate, set session, redirect /dashboard
+ *   GET  /dashboard/signup   → render signup form
+ *   POST /dashboard/signup   → create account, set session, redirect /dashboard
+ *   POST /dashboard/logout   → clear session, redirect /dashboard/login
  *
  * Then calls deps.registerPages(app) so Tasks 7–8 can attach their routes.
  */
@@ -55,46 +60,39 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
     prefix: '/dashboard/static/',
   });
 
-  // GET /dashboard/login — redirect to WorkOS hosted-login page
-  app.get('/dashboard/login', async (_req, reply) => {
-    return reply.redirect(deps.buildAuthorizationUrl());
+  // GET /dashboard/login — render the email+password login form
+  app.get('/dashboard/login', (_req, reply) => reply.view('login', { error: null }));
+
+  // POST /dashboard/login — authenticate and set session
+  // TODO(phase8): per-IP login rate limit (needs @fastify/rate-limit registered app-wide before dashboard mount)
+  app.post('/dashboard/login', async (req, reply) => {
+    const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+    const r = await deps.login((email ?? '').trim().toLowerCase(), password ?? '');
+    if (!r.ok) {
+      void reply.code(401);
+      return reply.view('login', { error: 'Invalid email or password' });
+    }
+    setSession(reply, { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email });
+    return reply.redirect('/dashboard');
   });
 
-  // GET /dashboard/login/callback — exchange WorkOS code for session
-  app.get('/dashboard/login/callback', async (req, reply) => {
-    const code = (req.query as { code?: string }).code;
-    if (!code) {
-      void reply.code(400);
-      return reply.view('login', { error: 'missing code' });
+  // GET /dashboard/signup — render the signup form
+  app.get('/dashboard/signup', (_req, reply) => reply.view('signup', { error: null }));
+
+  // POST /dashboard/signup — create account and set session
+  app.post('/dashboard/signup', async (req, reply) => {
+    const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+    const r = await deps.signup((email ?? '').trim().toLowerCase(), password ?? '');
+    if (r.status === 'email_taken') {
+      void reply.code(409);
+      return reply.view('signup', { error: 'That email is already in use.' });
     }
-    try {
-      const user = await deps.authenticateWithCode(code);
-      const resolution = await deps.resolveTenant(user.subject, user.email);
-      if (resolution.status === 'pending_invite') {
-        // Minimal pre-tenant session: boxed into the accept flow by requireSession.
-        setSession(reply, {
-          tenantId: '',
-          userId: '',
-          subject: user.subject,
-          role: 'viewer',
-          pending: true,
-          email: user.email,
-        });
-        return reply.redirect('/dashboard/accept');
-      }
-      setSession(reply, {
-        tenantId: resolution.tenantId,
-        userId: resolution.userId,
-        subject: user.subject,
-        role: resolution.role,
-        email: user.email,
-      });
-      return reply.redirect('/dashboard');
-    } catch (err) {
+    if (r.status === 'invalid_password') {
       void reply.code(400);
-      const message = err instanceof Error ? err.message : 'authentication failed';
-      return reply.view('login', { error: message });
+      return reply.view('signup', { error: 'Password must be at least 12 characters.' });
     }
+    setSession(reply, { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email });
+    return reply.redirect('/dashboard');
   });
 
   // POST /dashboard/logout — clear session and redirect to login

@@ -322,18 +322,6 @@ describe('requireRole', () => {
     await app.close();
   });
 
-  it('redirects a pending session to /dashboard/accept', async () => {
-    const app = await rrApp();
-    const res = await app.inject({
-      method: 'GET',
-      url: '/admin',
-      headers: { cookie: rrCookie(rrSession({ pending: true })) },
-    });
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe('/dashboard/accept');
-    await app.close();
-  });
-
   it('treats a legacy cookie without a valid role as no session (redirect to login)', async () => {
     const app = Fastify();
     await app.register(fastifyCookie, { secret: RR_SECRET });
