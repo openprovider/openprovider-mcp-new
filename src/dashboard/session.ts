@@ -1,11 +1,17 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { randomBytes } from 'node:crypto';
+import { ROLES, type Role } from '../auth/roles.js';
 
 export interface DashboardSession {
   tenantId: string;
   userId: string;
   subject: string;
+  role: Role;
   csrf: string;
+  /** Pre-tenant marker: a logged-in invitee who has not yet accepted. */
+  pending?: boolean;
+  /** Verified WorkOS email — used by the accept page to list pending invites. */
+  email?: string;
 }
 
 const COOKIE = 'op_dash';
@@ -36,7 +42,11 @@ export function readSession(req: FastifyRequest): DashboardSession | null {
   const unsigned = req.unsignCookie(raw);
   if (!unsigned.valid || !unsigned.value) return null;
   try {
-    return JSON.parse(unsigned.value) as DashboardSession;
+    const parsed = JSON.parse(unsigned.value) as DashboardSession;
+    // Reject legacy/tampered cookies lacking a valid role (e.g. cookies minted
+    // before the role field existed) — treat as no session so the caller redirects to login.
+    if (!parsed.role || !ROLES.has(parsed.role)) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -52,6 +62,8 @@ export function clearSession(reply: FastifyReply): void {
 /**
  * Fastify preHandler: redirect to /dashboard/login when no valid session exists,
  * otherwise stash the session on req for downstream handlers.
+ * A pending invitee (s.pending === true) is redirected to /dashboard/accept
+ * unless already on that path.
  */
 export function requireSession(
   req: FastifyRequest,
@@ -63,8 +75,38 @@ export function requireSession(
     void reply.redirect('/dashboard/login');
     return;
   }
+  // A logged-in invitee who has not accepted is boxed into the accept flow.
+  if (s.pending && !req.url.startsWith('/dashboard/accept')) {
+    void reply.redirect('/dashboard/accept');
+    return;
+  }
   (req as FastifyRequest & { session?: DashboardSession }).session = s;
   done();
+}
+
+/**
+ * preHandler factory: 403 when the session role is not in `allowed`.
+ * Redirects unauthenticated users to login and pending invitees to accept.
+ * Stashes the session on req like requireSession, so use it INSTEAD of requireSession.
+ */
+export function requireRole(...allowed: Role[]) {
+  return function (req: FastifyRequest, reply: FastifyReply, done: (e?: Error) => void): void {
+    const s = readSession(req);
+    if (!s) {
+      void reply.redirect('/dashboard/login');
+      return;
+    }
+    if (s.pending) {
+      void reply.redirect('/dashboard/accept');
+      return;
+    }
+    if (!allowed.includes(s.role)) {
+      void reply.code(403).send('Forbidden: insufficient role');
+      return;
+    }
+    (req as FastifyRequest & { session?: DashboardSession }).session = s;
+    done();
+  };
 }
 
 /**
