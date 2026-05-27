@@ -7,6 +7,7 @@ import { Eta } from 'eta';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setSession, clearSession } from './session.js';
+import type { TenantResolution } from '../auth/tenant-resolver.js';
 
 // Derive __dirname for ESM — works even if import.meta.dirname is undefined (Node <20.11).
 const __dirname =
@@ -23,7 +24,7 @@ export interface DashboardDeps {
     code: string,
   ) => Promise<{ userId: string; email: string; subject: string }>;
   /** Resolve (or provision) the tenant from WorkOS user identifiers. */
-  resolveTenant: (subject: string, email: string) => Promise<{ tenantId: string; userId: string }>;
+  resolveTenant: (subject: string, email: string) => Promise<TenantResolution>;
   /** Tasks 7–8 attach page routes via this hook. Pass a no-op for the scaffold alone. */
   registerPages: (app: FastifyInstance) => void;
 }
@@ -68,8 +69,26 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
     }
     try {
       const user = await deps.authenticateWithCode(code);
-      const t = await deps.resolveTenant(user.subject, user.email);
-      setSession(reply, { tenantId: t.tenantId, userId: t.userId, subject: user.subject });
+      const resolution = await deps.resolveTenant(user.subject, user.email);
+      if (resolution.status === 'pending_invite') {
+        // Minimal pre-tenant session: boxed into the accept flow by requireSession.
+        setSession(reply, {
+          tenantId: '',
+          userId: '',
+          subject: user.subject,
+          role: 'viewer',
+          pending: true,
+          email: user.email,
+        });
+        return reply.redirect('/dashboard/accept');
+      }
+      setSession(reply, {
+        tenantId: resolution.tenantId,
+        userId: resolution.userId,
+        subject: user.subject,
+        role: resolution.role,
+        email: user.email,
+      });
       return reply.redirect('/dashboard');
     } catch (err) {
       void reply.code(400);

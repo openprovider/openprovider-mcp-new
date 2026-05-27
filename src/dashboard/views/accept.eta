@@ -1,0 +1,17 @@
+<% layout('./layout') %>
+<h1>Accept Invitation</h1>
+
+<% if (it.error) { %>
+<div style="background:#ffebee;border:1px solid #c62828;color:#c62828;padding:0.75rem;margin-bottom:1rem;border-radius:4px">
+  <%= it.error %>
+</div>
+<% } %>
+
+<p>You've been invited to join a workspace. Paste your invitation token (from the link you were sent) and accept.</p>
+
+<form method="post" action="/dashboard/accept">
+  <input type="hidden" name="_csrf" value="<%= it.csrf %>">
+  <label for="accept-token">Invitation token</label>
+  <input type="text" id="accept-token" name="token" value="<%= it.token %>" style="margin-left:0.5rem;padding:0.35rem 0.5rem;width:24rem;font-family:monospace">
+  <button type="submit" style="margin-left:0.5rem;padding:0.35rem 1rem">Accept</button>
+</form>
