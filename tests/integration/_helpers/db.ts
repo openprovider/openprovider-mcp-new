@@ -29,3 +29,19 @@ export async function runAsTenant<T>(
     client.release();
   }
 }
+
+export async function seedTenantOwner(
+  pool: pg.Pool,
+  email = 'owner@test.local',
+  passwordHash = 'x-not-a-real-hash',
+): Promise<{ status: string; tenant_id: string; user_id: string; role: string }> {
+  const c = await pool.connect();
+  try {
+    await c.query('SET ROLE app_role');
+    const r = await c.query('SELECT * FROM signup_tenant($1, $2)', [email, passwordHash]);
+    return r.rows[0];
+  } finally {
+    await c.query('RESET ROLE');
+    c.release();
+  }
+}
