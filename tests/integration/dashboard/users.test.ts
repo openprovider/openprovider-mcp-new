@@ -4,7 +4,7 @@ import { sign } from '@fastify/cookie';
 import type pg from 'pg';
 import type { FastifyInstance } from 'fastify';
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
-import { migratedDb, runAsTenant } from '../_helpers/db.js';
+import { migratedDb, runAsTenant, seedTenantOwner } from '../_helpers/db.js';
 import { createFakeKms } from '../../../src/secrets/fake-kms.js';
 import { registerDashboard } from '../../../src/dashboard/server.js';
 import { registerUsers } from '../../../src/dashboard/routes/users.js';
@@ -52,19 +52,9 @@ describe('dashboard users page', () => {
     fixture = await startPostgres();
     const m = await migratedDb(fixture.url);
     pool = m.pool;
-    const c = await pool.connect();
-    try {
-      await c.query('SET ROLE app_role');
-      const r = await c.query<{ tenant_id: string; user_id: string }>(
-        'SELECT * FROM resolve_or_provision_tenant($1,$2)',
-        ['users_owner', 'users-owner@example.com'],
-      );
-      tenantId = r.rows[0]!.tenant_id;
-      ownerUserId = r.rows[0]!.user_id;
-    } finally {
-      await c.query('RESET ROLE');
-      c.release();
-    }
+    const s = await seedTenantOwner(pool, 'users-owner@example.com');
+    tenantId = s.tenant_id;
+    ownerUserId = s.user_id;
 
     app = Fastify();
     await registerDashboard(app, {
@@ -189,10 +179,9 @@ describe('dashboard users page', () => {
     const c = await pool.connect();
     try {
       await c.query('SET ROLE app_role');
-      const r = await c.query<{ user_id: string }>('SELECT * FROM accept_invitation($1,$2,$3)', [
+      const r = await c.query<{ user_id: string }>('SELECT * FROM accept_invitation($1,$2)', [
         token,
-        subject,
-        email,
+        'seed-hash',
       ]);
       return r.rows[0]!.user_id;
     } finally {
@@ -428,6 +417,48 @@ describe('dashboard users page', () => {
         })
       ).statusCode,
     ).toBe(403);
+  });
+
+  it('owner can issue a password-reset link for a member', async () => {
+    const uid = await seedMember('resetme@example.com', 'operator', 'resetme_sub');
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${uid}/reset`,
+      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('/dashboard/reset?token=');
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM password_resets WHERE user_id=$1`, [uid]);
+      expect(r.rows[0]!.count).toBe('1');
+    });
+  });
+
+  it('reset action requires CSRF', async () => {
+    const uid = await seedMember('resetme2@example.com', 'viewer', 'resetme2_sub');
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${uid}/reset`,
+      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=WRONG`,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('an admin cannot issue a reset link for an owner (no canManage → 403)', async () => {
+    const adminId = await seedMember('rstadmin@example.com', 'admin', 'rstadmin_sub');
+    const adminSession = ownerSession({ role: 'admin', userId: adminId, subject: 'rstadmin@example.com', email: 'rstadmin@example.com' });
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${ownerUserId}/reset`,
+      headers: { cookie: cookie(adminSession), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}`,
+    });
+    expect(res.statusCode).toBe(403);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM password_resets WHERE user_id=$1`, [ownerUserId]);
+      expect(r.rows[0]!.count).toBe('0');
+    });
   });
 
   it('confirmations: an admin cannot consume an owner-only confirmation', async () => {

@@ -13,6 +13,14 @@
 </div>
 <% } %>
 
+<% if (it.resetLink) { %>
+<div style="background:#e8f5e9;border:2px solid #4caf50;padding:1rem;margin-bottom:1.5rem;border-radius:4px">
+  <h2 style="margin-top:0;color:#2e7d32">Password reset link created</h2>
+  <p style="color:#c62828"><strong>Copy this reset link — share it with the user.</strong></p>
+  <div style="font-family:monospace;background:#fff;padding:0.75rem;border:1px solid #a5d6a7;border-radius:4px;word-break:break-all"><%= it.resetLink %></div>
+</div>
+<% } %>
+
 <section style="margin-bottom:2rem">
   <h2>Invite a teammate</h2>
   <form method="post" action="/dashboard/users/invite">
@@ -54,6 +62,10 @@
           <form method="post" action="/dashboard/users/<%= m.id %>/remove" style="display:inline" onsubmit="return confirm('Remove this user and revoke their API keys?')">
             <input type="hidden" name="_csrf" value="<%= it.csrf %>">
             <button type="submit" style="color:#c62828">Remove</button>
+          </form>
+          <form method="post" action="/dashboard/users/<%= m.id %>/reset" style="display:inline">
+            <input type="hidden" name="_csrf" value="<%= it.csrf %>">
+            <button type="submit">Reset password</button>
           </form>
           <% } else { %><span style="color:#999">—</span><% } %>
         </td>

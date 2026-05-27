@@ -53,6 +53,7 @@ export function registerUsers(app: FastifyInstance, deps: { pool: pg.Pool }): vo
       members,
       invites,
       newInviteLink: null,
+      resetLink: null,
       error: null,
     });
   });
@@ -105,6 +106,7 @@ export function registerUsers(app: FastifyInstance, deps: { pool: pg.Pool }): vo
       members,
       invites,
       newInviteLink,
+      resetLink: null,
       error,
     });
   });
@@ -148,7 +150,7 @@ export function registerUsers(app: FastifyInstance, deps: { pool: pg.Pool }): vo
       return reply.code(outcome.code).send(body);
     }
     const { members, invites } = await loadPage(deps.pool, session.tenantId);
-    return reply.view('users', { csrf: session.csrf, actorRole: session.role, actorUserId: session.userId, members, invites, newInviteLink: null, error: null });
+    return reply.view('users', { csrf: session.csrf, actorRole: session.role, actorUserId: session.userId, members, invites, newInviteLink: null, resetLink: null, error: null });
   });
 
   // POST /dashboard/users/:id/remove — soft-delete + revoke the user's API keys
@@ -188,7 +190,7 @@ export function registerUsers(app: FastifyInstance, deps: { pool: pg.Pool }): vo
       return reply.code(outcome.code).send(body);
     }
     const { members, invites } = await loadPage(deps.pool, session.tenantId);
-    return reply.view('users', { csrf: session.csrf, actorRole: session.role, actorUserId: session.userId, members, invites, newInviteLink: null, error: null });
+    return reply.view('users', { csrf: session.csrf, actorRole: session.role, actorUserId: session.userId, members, invites, newInviteLink: null, resetLink: null, error: null });
   });
 
   // POST /dashboard/invitations/:id/revoke — delete a pending invite (frees the unique-email slot)
@@ -200,6 +202,31 @@ export function registerUsers(app: FastifyInstance, deps: { pool: pg.Pool }): vo
       await client.query(`DELETE FROM invitations WHERE id = $1 AND tenant_id = $2 AND accepted_at IS NULL`, [id, session.tenantId]);
     });
     const { members, invites } = await loadPage(deps.pool, session.tenantId);
-    return reply.view('users', { csrf: session.csrf, actorRole: session.role, actorUserId: session.userId, members, invites, newInviteLink: null, error: null });
+    return reply.view('users', { csrf: session.csrf, actorRole: session.role, actorUserId: session.userId, members, invites, newInviteLink: null, resetLink: null, error: null });
+  });
+
+  // POST /dashboard/users/:id/reset — issue a single-use password-reset link
+  app.post('/dashboard/users/:id/reset', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    if (!assertCsrf(req)) return reply.code(403).send('Forbidden: CSRF token mismatch');
+    const session = (req as typeof req & { session: DashboardSession }).session;
+    const { id } = req.params as { id: string };
+    const token = randomBytes(32).toString('base64url');
+    const outcome = await withTenantConn(deps.pool, session.tenantId, async (client) => {
+      const t = await client.query<{ role: Role; status: string }>(
+        `SELECT role, status FROM users WHERE id = $1 AND tenant_id = $2`, [id, session.tenantId]);
+      const target = t.rows[0];
+      if (!target || target.status === 'deleted') return { code: 404 as const };
+      if (!canManage(session.role, target.role)) return { code: 403 as const };
+      await client.query(
+        `INSERT INTO password_resets (tenant_id, user_id, token, expires_at) VALUES ($1,$2,$3, now()+interval '1 hour')`,
+        [session.tenantId, id, token]);
+      return { code: 200 as const };
+    });
+    if (outcome.code !== 200) return reply.code(outcome.code).send(outcome.code === 403 ? 'Forbidden' : 'User not found');
+    const { members, invites } = await loadPage(deps.pool, session.tenantId);
+    return reply.view('users', {
+      csrf: session.csrf, actorRole: session.role, actorUserId: session.userId,
+      members, invites, newInviteLink: null, resetLink: `/dashboard/reset?token=${token}`, error: null,
+    });
   });
 }
