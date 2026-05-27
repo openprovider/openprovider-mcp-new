@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.10.0-phase6c] — 2026-05-27
+
+### Added
+- Local email+password auth: migration 0013 adds `users.password_hash` (nullable), makes `users.oauth_subject` nullable, adds a global active-email unique index, and introduces the `password_resets` table.
+- SECURITY DEFINER functions: `signup_tenant` (atomic tenant+owner provisioning), `find_user_by_email`, `consume_password_reset`; `accept_invitation` re-signatured to accept `(token, password_hash)` — invitee sets their password at accept time.
+- Dashboard signup and login pages (session via signed `op_dash` cookie, `DASHBOARD_COOKIE_SECRET`).
+- Invite-accept-sets-password flow: token possession authorizes acceptance; no separate email-match step.
+- Owner/admin token'd reset links (`/dashboard/reset?token=…`, shown once, single-use, 1-hour expiry).
+- Logged-in change-password form on the dashboard.
+- Invite tokens are single-use and expire after 7 days; all tokens and password hashes use argon2id.
+
+### Changed
+- `resolve_or_provision_tenant` (WorkOS-era JIT provisioning) replaced by `signup_tenant` for self-signup and the re-signatured `accept_invitation` for invite acceptance.
+
+### Removed
+- WorkOS OAuth: `@workos-inc/node` dependency, the OAuth token verifier (`oauth/workos.ts`), the `tenant-resolver.ts` module, the hosted-login redirect/callback routes, and all `WORKOS_*` configuration (`WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_AUTHKIT_DOMAIN`, `WORKOS_JWKS_URI`, `WORKOS_ISSUER`).
+- `/mcp` WorkOS JWT path — the endpoint now accepts API keys (`op_live_…`) and the dev bearer token only.
+
+### Tests
+- Unit: `password.ts` (argon2id hash/verify + min-12-char policy).
+- Integration: `signup_tenant` / `find_user_by_email` / `consume_password_reset` SQL functions; dashboard signup, login, invite-accept-sets-password, reset-link, and change-password routes.
+- Local-auth e2e: signup → issue API key → invite teammate → invitee accepts + sets password → login → operator proposes write → owner approves via `confirm_pending`.
+
+### Migration note
+Existing WorkOS users have no `password_hash` until an owner issues a reset link. Dev databases are a clean cutover — run `npm run db:migrate` on a fresh schema.
+
 ## [0.9.0-phase6b] — 2026-05-27
 
 ### Added

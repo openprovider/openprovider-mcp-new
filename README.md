@@ -1,9 +1,11 @@
-# Openprovider MCP — Enterprise (v0.8.0 Phase 6: API-key auth + single-owner dashboard)
+# Openprovider MCP — Enterprise (v0.10.0 Phase 6c: local email+password auth)
 
-A multi-tenant SaaS MCP server for Openprovider. **Phase 6 ships `op_live_` API-key authentication (argon2id, `api_keys` table, `resolve_api_key` SECURITY DEFINER) and a single-owner server-rendered dashboard** (Fastify + eta + htmx, WorkOS hosted login) for credential onboarding, policy editing, API-key management, audit viewing, and confirmation approval. Phase 7 migrated secrets/KMS from AWS KMS to GCP KMS (single-cloud) and added a tamper-evident per-tenant audit hash chain. Phase 5 shipped the five write tools (`register_domain`, `update_domain`, `create_contact`, `update_contact`, `delete_contact`) on Phase 4's confirmation machinery. Phase 4 shipped the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting. Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
+A multi-tenant SaaS MCP server for Openprovider. **Phase 6c replaces WorkOS OAuth with self-hosted email+password authentication** (argon2id, migration 0013, signup/login/invite/reset dashboard flows). Phase 6b added multi-user invitations and full RBAC. Phase 6 shipped `op_live_` API-key authentication and a server-rendered dashboard. Phase 7 migrated secrets/KMS from AWS KMS to GCP KMS (single-cloud) and added a tamper-evident per-tenant audit hash chain. Phase 5 shipped the five write tools (`register_domain`, `update_domain`, `create_contact`, `update_contact`, `delete_contact`) on Phase 4's confirmation machinery. Phase 4 shipped the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting. Phase 3 completed authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
 
 ## Status
 
+- Phase 6c complete: `v0.10.0-phase6c` tag.
+- Phase 6b complete: `v0.9.0-phase6b` tag.
 - Phase 6 complete: `v0.8.0-phase6` tag.
 - Phase 7 complete: `v0.7.0-phase7` tag.
 - Phase 5 complete: `v0.6.0-phase5` tag.
@@ -109,7 +111,19 @@ A minimal policy that allows billable writes up to €100/month:
 
 ## Authentication
 
-Real WorkOS AuthKit tokens are now accepted. On first login the server atomically provisions a tenant and owner user — no pre-seeding required. Each WorkOS user maps 1:1 to a tenant via `users.oauth_subject`.
+Authentication is **local email+password** — there is no external IdP. The dashboard provides signup and login pages; sessions are signed cookies (`op_dash`, keyed by `DASHBOARD_COOKIE_SECRET`).
+
+**Self-signup.** `POST /dashboard/signup` with an email and a password (minimum 12 characters) atomically provisions a new tenant and owner user.
+
+**Invitations.** An owner or admin invites a teammate by email and role. The dashboard generates a token'd accept link (`/dashboard/accept?token=…`) shown once in the UI. The invitee opens the link and **sets their own password** — token possession is sufficient to authorize acceptance; no separate email-match step is required. Email delivery is deferred (the inviting user shares the link manually). Invite tokens expire after 7 days and are single-use.
+
+**Password reset.** An owner or admin can issue a single-use reset link (`/dashboard/reset?token=…`) shown once in the UI. Reset tokens expire after 1 hour. Logged-in users can also change their password directly. There is no self-service "forgot password" flow yet (an email channel is required).
+
+**Passwords** are hashed with argon2id. Reset and invite tokens are single-use and expiring.
+
+**`/mcp` authenticates by API key (`op_live_…`) or the dev bearer token** (`DEV_BEARER_TOKEN`). The WorkOS OAuth/JWT path has been removed.
+
+**RBAC** is unchanged from Phase 6b — owner/admin/operator/viewer roles are enforced on the dashboard (`requireRole` preHandler) and on the MCP approver-role check. See the RBAC matrix in the Dashboard section.
 
 Before a tenant can call Openprovider tools, their Openprovider credentials must be onboarded via the dashboard (see below) or the CLI:
 
@@ -117,11 +131,11 @@ Before a tenant can call Openprovider tools, their Openprovider credentials must
 npm run tenant:onboard -- --tenant <uuid> --username <op-user> --password <pass>
 ```
 
-`<uuid>` is the `tenant_id` returned by `resolve_or_provision_tenant` (visible in the DB after the user's first login).
+`<uuid>` is the `tenant_id` provisioned at signup (visible in the DB after `POST /dashboard/signup` or as the owner's `tenant_id`).
 
 ## Dashboard
 
-Phase 6 ships a single-owner server-rendered dashboard mounted at `/dashboard` on the same Fastify server. Authentication uses WorkOS hosted login (redirect to WorkOS → callback sets a signed cookie session).
+The dashboard is mounted at `/dashboard` on the same Fastify server. Authentication uses local email+password (signup/login forms → signed cookie session). No external IdP is required.
 
 ### Pages
 
@@ -138,15 +152,13 @@ All state-changing POSTs are CSRF-protected (signed-cookie token round-trip).
 
 > **Single-owner:** The dashboard is provisioned for a single owner per tenant. Multi-user invitation and full RBAC are deferred to Phase 6b.
 
-### Phase 6b — Team & RBAC
+### Phase 6b / 6c — Team & RBAC
 
-Phase 6b adds multi-user invitations and a full owner/admin/operator/viewer RBAC model.
+Phase 6b added multi-user invitations and a full owner/admin/operator/viewer RBAC model. Phase 6c replaced WorkOS with local auth while preserving the same RBAC structure.
 
-**Invitations.** An owner or admin invites a teammate by email and role (admin, operator, or viewer — the owner role is never assignable via invitation). The dashboard generates a token'd accept link (`/dashboard/accept?token=…`) shown once in the UI. Email delivery is not yet automated — the inviting user shares the link manually.
+**Invitations.** An owner or admin invites a teammate by email and role (admin, operator, or viewer — the owner role is never assignable via invitation). The dashboard generates a token'd accept link (`/dashboard/accept?token=…`) shown once in the UI. The invitee opens the link and sets their password — token possession authorizes acceptance. Email delivery is not yet automated — the inviting user shares the link manually. Invite tokens are single-use and expire after 7 days.
 
-**Explicit accept with email match.** The invitee logs in via WorkOS and lands on the accept page. Accepting requires the logged-in WorkOS verified email to exactly match the invitation's email address. A leaked token alone cannot be redeemed by a different person.
-
-**One user = one tenant.** An email that already belongs to any existing user cannot be invited again. A WorkOS subject maps to exactly one tenant (enforced by `resolve_or_provision_tenant`'s `pending_invite` branch).
+**One user = one tenant.** An email that already belongs to any existing user cannot be invited again. A global active-email unique index enforces this at the DB layer.
 
 **RBAC matrix.**
 
@@ -170,7 +182,7 @@ Phase 6b adds multi-user invitations and a full owner/admin/operator/viewer RBAC
 
 ## API Keys
 
-Phase 6 introduces `op_live_` API keys as an alternative to WorkOS AuthKit tokens for `/mcp` access.
+`op_live_` API keys are the primary programmatic authentication method for `/mcp` access (alongside the dev bearer token).
 
 - Keys are issued via the **dashboard keys page** (`/dashboard/keys`). The plaintext is shown exactly once at issuance and is never stored — only an argon2id hash is persisted.
 - Key format: `op_live_<base64url-random>` (first 12 characters form the lookup prefix).
@@ -188,14 +200,14 @@ curl -H "Authorization: Bearer op_live_<your-key>" \
 
 ## Local development
 
-Requires Node 20.11+, Docker, a WorkOS sandbox project (free tier).
+Requires Node 20.11+, Docker.
 
 ```bash
 nvm use
 npm install
 docker compose -f docker-compose.dev.yml up -d
 cp .env.example .env
-# Edit .env and paste your real WORKOS_* values from your WorkOS dashboard.
+# Edit .env — set DASHBOARD_COOKIE_SECRET and DEV_BEARER_TOKEN at minimum.
 npm run db:migrate
 npm run dev
 ```
@@ -218,8 +230,9 @@ For local development, `fake-gcs-server` replaces LocalStack. The `docker-compos
 | Variable | Description |
 |---|---|
 | `DASHBOARD_COOKIE_SECRET` | Secret used to sign the `op_dash` session cookie (min 32 chars; generate with `openssl rand -hex 32`) |
+| `DEV_BEARER_TOKEN` | Dev escape-hatch bearer token for `/mcp` (omit in production) |
 
-The dashboard uses WorkOS hosted login — the existing `WORKOS_CLIENT_ID` and `WORKOS_CLIENT_SECRET` vars apply. Set `WORKOS_REDIRECT_URI` to `http://localhost:3000/dashboard/login/callback` in your WorkOS sandbox project.
+No `WORKOS_*` variables are required. The dashboard uses local email+password auth only.
 
 ### Fastify version
 
@@ -249,7 +262,7 @@ Every row inserted into `audit_events` is chained by a `BEFORE INSERT` trigger:
 
 ### Hitting the MCP endpoint
 
-`/mcp` requires either a dev bearer (`DEV_BEARER_TOKEN`) or a real WorkOS AuthKit access token. The token is verified, and the user's tenant is resolved (or provisioned) automatically.
+`/mcp` accepts either a dev bearer (`DEV_BEARER_TOKEN`) or an `op_live_` API key. WorkOS AuthKit tokens are no longer accepted.
 
 ```bash
 curl -H "authorization: Bearer $DEV_BEARER_TOKEN" \
