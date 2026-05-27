@@ -282,7 +282,7 @@ function rrCookie(session: DashboardSession): string {
 async function rrApp() {
   const app = Fastify();
   await app.register(fastifyCookie, { secret: RR_SECRET });
-  app.get('/admin', { preHandler: requireRole('owner', 'admin') }, async () => 'ok');
+  app.get('/admin', { preHandler: requireRole('owner', 'admin') }, () => Promise.resolve('ok'));
   await app.ready();
   return app;
 }
@@ -294,14 +294,22 @@ function rrSession(overrides: Partial<DashboardSession> = {}): DashboardSession 
 describe('requireRole', () => {
   it('allows a role in the allowed set', async () => {
     const app = await rrApp();
-    const res = await app.inject({ method: 'GET', url: '/admin', headers: { cookie: rrCookie(rrSession({ role: 'admin' })) } });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin',
+      headers: { cookie: rrCookie(rrSession({ role: 'admin' })) },
+    });
     expect(res.statusCode).toBe(200);
     await app.close();
   });
 
   it('403s a role not in the allowed set', async () => {
     const app = await rrApp();
-    const res = await app.inject({ method: 'GET', url: '/admin', headers: { cookie: rrCookie(rrSession({ role: 'viewer' })) } });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin',
+      headers: { cookie: rrCookie(rrSession({ role: 'viewer' })) },
+    });
     expect(res.statusCode).toBe(403);
     await app.close();
   });
@@ -316,7 +324,11 @@ describe('requireRole', () => {
 
   it('redirects a pending session to /dashboard/accept', async () => {
     const app = await rrApp();
-    const res = await app.inject({ method: 'GET', url: '/admin', headers: { cookie: rrCookie(rrSession({ pending: true })) } });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin',
+      headers: { cookie: rrCookie(rrSession({ pending: true })) },
+    });
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/dashboard/accept');
     await app.close();
@@ -325,7 +337,7 @@ describe('requireRole', () => {
   it('treats a legacy cookie without a valid role as no session (redirect to login)', async () => {
     const app = Fastify();
     await app.register(fastifyCookie, { secret: RR_SECRET });
-    app.get('/x', { preHandler: requireSession }, async () => 'ok');
+    app.get('/x', { preHandler: requireSession }, () => Promise.resolve('ok'));
     await app.ready();
     // A cookie shaped like a pre-role-field session (no `role`).
     const legacy = `op_dash=${sign(JSON.stringify({ tenantId: 't', userId: 'u', subject: 's', csrf: 'c' }), RR_SECRET)}`;
