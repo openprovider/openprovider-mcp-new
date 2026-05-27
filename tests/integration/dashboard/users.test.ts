@@ -126,4 +126,149 @@ describe('dashboard users page', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatch(/already a pending invitation/i);
   });
+
+  // Helper: create + accept an invite to materialise a member with a known role.
+  async function seedMember(email: string, role: 'admin' | 'operator' | 'viewer', subject: string) {
+    const token = `seed-${subject}`;
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
+         VALUES ($1,$2,$3,$4, now() + interval '7 days')`,
+        [tenantId, email, role, token],
+      );
+    });
+    const c = await pool.connect();
+    try {
+      await c.query('SET ROLE app_role');
+      const r = await c.query<{ user_id: string }>(
+        'SELECT * FROM accept_invitation($1,$2,$3)',
+        [token, subject, email],
+      );
+      return r.rows[0]!.user_id;
+    } finally {
+      await c.query('RESET ROLE');
+      c.release();
+    }
+  }
+
+  it('change-role: owner promotes an operator to admin', async () => {
+    const uid = await seedMember('promote@example.com', 'operator', 'promote_sub');
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${uid}/role`,
+      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}&role=admin`,
+    });
+    expect(res.statusCode).toBe(200);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [uid]);
+      expect(r.rows[0]!.role).toBe('admin');
+    });
+  });
+
+  it('change-role: an admin cannot modify an owner (403)', async () => {
+    const adminId = await seedMember('admin1@example.com', 'admin', 'admin1_sub');
+    const adminSession = ownerSession({ role: 'admin', userId: adminId, subject: 'admin1_sub', email: 'admin1@example.com' });
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${ownerUserId}/role`,
+      headers: { cookie: cookie(adminSession), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}&role=viewer`,
+    });
+    expect(res.statusCode).toBe(403);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [ownerUserId]);
+      expect(r.rows[0]!.role).toBe('owner');
+    });
+  });
+
+  it('change-role: demoting the last owner is rejected', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${ownerUserId}/role`,
+      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}&role=admin`,
+    });
+    expect(res.statusCode).toBe(400);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [ownerUserId]);
+      expect(r.rows[0]!.role).toBe('owner');
+    });
+  });
+
+  it('remove: soft-deletes the user and revokes their API keys', async () => {
+    const uid = await seedMember('removeme@example.com', 'operator', 'removeme_sub');
+    let keyId = '';
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ id: string }>(
+        `INSERT INTO api_keys (tenant_id, prefix, hash, name, created_by_user_id)
+         VALUES ($1, 'op_live_rm00', 'x', 'rm-key', $2) RETURNING id`,
+        [tenantId, uid],
+      );
+      keyId = r.rows[0]!.id;
+    });
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${uid}/remove`,
+      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}`,
+    });
+    expect(res.statusCode).toBe(200);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const u = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [uid]);
+      expect(u.rows[0]!.status).toBe('deleted');
+      const k = await client.query<{ revoked_at: Date | null }>(`SELECT revoked_at FROM api_keys WHERE id = $1`, [keyId]);
+      expect(k.rows[0]!.revoked_at).not.toBeNull();
+    });
+  });
+
+  it('remove: removing the last owner is rejected', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${ownerUserId}/remove`,
+      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}`,
+    });
+    expect(res.statusCode).toBe(400);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [ownerUserId]);
+      expect(r.rows[0]!.status).toBe('active');
+    });
+  });
+
+  it('change-role: an admin may demote a peer admin (lateral management allowed)', async () => {
+    const peerId = await seedMember('peeradmin@example.com', 'admin', 'peeradmin_sub');
+    const actorId = await seedMember('actoradmin@example.com', 'admin', 'actoradmin_sub');
+    const actorSession = ownerSession({ role: 'admin', userId: actorId, subject: 'actoradmin_sub', email: 'actoradmin@example.com' });
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/users/${peerId}/role`,
+      headers: { cookie: cookie(actorSession), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}&role=operator`,
+    });
+    expect(res.statusCode).toBe(200);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [peerId]);
+      expect(r.rows[0]!.role).toBe('operator');
+    });
+  });
+
+  it('revoke pending invite: deletes the row', async () => {
+    let inviteId = '';
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ id: string }>(
+        `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
+         VALUES ($1, 'revokeinv@example.com', 'viewer', 'revoke-tok', now() + interval '7 days') RETURNING id`,
+        [tenantId],
+      );
+      inviteId = r.rows[0]!.id;
+    });
+    const res = await app.inject({
+      method: 'POST', url: `/dashboard/invitations/${inviteId}/revoke`,
+      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `_csrf=${CSRF}`,
+    });
+    expect(res.statusCode).toBe(200);
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM invitations WHERE id = $1`,
+        [inviteId],
+      );
+      expect(r.rows[0]!.count).toBe('0');
+    });
+  });
 });
