@@ -33,6 +33,8 @@ import { createUpdateDomainTool } from './tools/update-domain.js';
 import { createCreateContactTool } from './tools/create-contact.js';
 import { createUpdateContactTool } from './tools/update-contact.js';
 import { createDeleteContactTool } from './tools/delete-contact.js';
+import { createSuggestDomainTool } from './tools/suggest-domain.js';
+import { createGetDomainAuthcodeTool } from './tools/get-domain-authcode.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -312,6 +314,8 @@ async function main(): Promise<void> {
         createUpdateContactTool({ client: openproviderClient, tokenManager }),
         createDeleteContactTool({ client: openproviderClient, tokenManager }),
         createListPendingConfirmationsTool({ getClient: () => client }),
+        createSuggestDomainTool({ client: openproviderClient, tokenManager }),
+        createGetDomainAuthcodeTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.

@@ -15,6 +15,8 @@ import { createUpdateContactTool } from '../tools/update-contact.js';
 import { createDeleteContactTool } from '../tools/delete-contact.js';
 import { createListPendingConfirmationsTool } from '../tools/list-pending-confirmations.js';
 import { createConfirmPendingTool } from '../tools/confirm-pending.js';
+import { createSuggestDomainTool } from '../tools/suggest-domain.js';
+import { createGetDomainAuthcodeTool } from '../tools/get-domain-authcode.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -49,6 +51,8 @@ export function buildToolCatalog(): ToolEntry[] {
       consume: () =>
         Promise.reject(new Error('catalog entry is list-only; dispatched via fast-path')),
     }),
+    createSuggestDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDomainAuthcodeTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({
