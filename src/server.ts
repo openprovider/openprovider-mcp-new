@@ -39,6 +39,7 @@ import {
   idempotencyKeyFor,
 } from './policies/idempotency.js';
 import { createConfirmPendingConsume } from './mcp/confirm-pending.js';
+import { buildToolCatalog } from './mcp/tool-catalog.js';
 import { createOpenproviderClient } from './openprovider/client.js';
 import { createOpenproviderTokenManager } from './openprovider/token-manager.js';
 import { createPgTokenCache } from './openprovider/token-cache-pg.js';
@@ -376,6 +377,7 @@ async function main(): Promise<void> {
     verifier,
     resolveTenant,
     apiKeyResolver,
+    tools: buildToolCatalog(),
     oauth: {
       authorizationServer: cfg.workosAuthkitDomain,
       resource: `http://localhost:${cfg.port}`,
