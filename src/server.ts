@@ -5,12 +5,13 @@ import { startOtel } from './observability/otel.js';
 import { createLogger } from './observability/logger.js';
 import { createDb } from './db/client.js';
 import { createGcpKms } from './secrets/gcp-kms.js';
-import { createWorkOsVerifier } from './auth/oauth/workos.js';
 import { createApiKeyResolver } from './auth/api-key.js';
 import type { Principal } from './auth/principal.js';
 import { createDispatcher, type ConfirmDeps, type DispatcherTool } from './mcp/dispatch.js';
-import { WorkOS } from '@workos-inc/node';
+import { signup as signupFn, findUserByEmail } from './auth/local-auth.js';
+import { hashPassword, verifyPassword, assertPasswordPolicy } from './auth/password.js';
 import { registerDashboard } from './dashboard/server.js';
+import { registerAuthRoutes } from './dashboard/routes/auth.js';
 import { registerOverview } from './dashboard/routes/overview.js';
 import { registerOpenprovider } from './dashboard/routes/openprovider.js';
 import { registerPolicy } from './dashboard/routes/policy.js';
@@ -45,7 +46,6 @@ import { createOpenproviderTokenManager } from './openprovider/token-manager.js'
 import { createPgTokenCache } from './openprovider/token-cache-pg.js';
 import { createSecretsStore } from './secrets/store.js';
 import { createDbSecretsRepo } from './secrets/db-repo.js';
-import { createTenantResolver } from './auth/tenant-resolver.js';
 import { OpenproviderAccountNotConnected } from './openprovider/errors.js';
 import {
   getPolicy,
@@ -70,14 +70,7 @@ async function main(): Promise<void> {
   });
 
   const { pool } = createDb({ connectionString: cfg.databaseUrl });
-  const resolveTenant = createTenantResolver(pool);
   const kms = createGcpKms({ keyName: cfg.gcpKmsKeyName });
-
-  const verifier = createWorkOsVerifier({
-    clientId: cfg.workosClientId,
-    issuer: cfg.workosIssuer,
-    jwksUri: cfg.workosJwksUri,
-  });
 
   const devPrincipal: Principal = {
     kind: 'user',
@@ -374,15 +367,8 @@ async function main(): Promise<void> {
   const app = await createMcpServer({
     devToken: cfg.devBearerToken,
     devPrincipal,
-    verifier,
-    resolveTenant,
     apiKeyResolver,
     tools: buildToolCatalog(),
-    oauth: {
-      authorizationServer: cfg.workosAuthkitDomain,
-      resource: `http://localhost:${cfg.port}`,
-      scopesSupported: ['mcp:read', 'mcp:write'],
-    },
     dispatchFactory,
     readinessChecks: [
       {
@@ -413,35 +399,31 @@ async function main(): Promise<void> {
   // connections. createMcpServer does NOT call app.ready() internally, so
   // plugin registration here is safe.
   // ---------------------------------------------------------------------------
-  const workos = new WorkOS(cfg.workosApiKey, { clientId: cfg.workosClientId });
-  const baseUrl = `http://localhost:${cfg.port}`;
-  const dashboardRedirectUri = `${baseUrl}/dashboard/login/callback`;
-
   await registerDashboard(app, {
     cookieSecret: cfg.dashboardCookieSecret,
-
-    buildAuthorizationUrl: () =>
-      workos.userManagement.getAuthorizationUrl({
-        provider: 'authkit',
-        clientId: cfg.workosClientId,
-        redirectUri: dashboardRedirectUri,
-      }),
-
-    authenticateWithCode: async (code: string) => {
-      const resp = await workos.userManagement.authenticateWithCode({
-        clientId: cfg.workosClientId,
-        code,
-      });
-      return {
-        userId: resp.user.id,
-        email: resp.user.email,
-        subject: resp.user.id,
-      };
+    signup: async (email, password) => {
+      try {
+        assertPasswordPolicy(password);
+      } catch {
+        return { status: 'invalid_password' as const };
+      }
+      const r = await signupFn(pool, email, await hashPassword(password));
+      return r.status === 'created'
+        ? {
+            status: 'created' as const,
+            tenantId: r.tenantId,
+            userId: r.userId,
+            role: r.role,
+            email,
+          }
+        : { status: 'email_taken' as const };
     },
-
-    resolveTenant,
-
-    // Tasks 7–8 page routes.
+    login: async (email, password) => {
+      const u = await findUserByEmail(pool, email);
+      if (!u || !u.passwordHash || !(await verifyPassword(u.passwordHash, password)))
+        return { ok: false as const };
+      return { ok: true as const, tenantId: u.tenantId, userId: u.userId, role: u.role, email };
+    },
     registerPages: (pageApp) => {
       registerOverview(pageApp, { pool });
       registerOpenprovider(pageApp, { pool, kms, kmsKeyName: cfg.gcpKmsKeyName });
@@ -456,6 +438,7 @@ async function main(): Promise<void> {
       });
       registerUsers(pageApp, { pool });
       registerAccept(pageApp, { pool });
+      registerAuthRoutes(pageApp, { pool });
     },
   });
 

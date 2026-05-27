@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
-import { migratedDb } from '../_helpers/db.js';
+import { migratedDb, seedTenantOwner } from '../_helpers/db.js';
 
 describe('migration 0008 + default policy seeding', () => {
   let fixture: PgFixture;
@@ -11,21 +11,18 @@ describe('migration 0008 + default policy seeding', () => {
     fixture = await startPostgres();
     const m = await migratedDb(fixture.url);
     pool = m.pool;
-  }, 60_000);
+  }, 120_000);
   afterAll(async () => {
-    await pool.end();
-    await fixture.stop();
+    await pool?.end();
+    await fixture?.stop();
   });
 
   it('seeds a default policy when a tenant is provisioned', async () => {
+    // signup_tenant (local auth) provisions a tenant + owner and seeds the default policy.
+    const seeded = await seedTenantOwner(pool, 'p@example.com', 'x-hash-policy');
+    const tenantId = seeded.tenant_id;
     const c = await pool.connect();
     try {
-      await c.query('SET ROLE app_role');
-      const r = await c.query<{ tenant_id: string }>(
-        'SELECT * FROM resolve_or_provision_tenant($1,$2)',
-        ['sub_policy', 'p@example.com'],
-      );
-      const tenantId = r.rows[0]!.tenant_id;
       await c.query('BEGIN');
       await c.query('SET LOCAL ROLE app_role');
       await c.query('SELECT set_config($1,$2,true)', ['app.current_tenant', tenantId]);

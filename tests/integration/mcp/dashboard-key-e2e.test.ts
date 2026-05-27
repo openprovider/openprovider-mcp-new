@@ -19,7 +19,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AddressInfo } from 'node:net';
 
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
-import { migratedDb, runAsTenant } from '../_helpers/db.js';
+import { migratedDb, runAsTenant, seedTenantOwner } from '../_helpers/db.js';
 import { createFakeKms } from '../../../src/secrets/fake-kms.js';
 import { createSecretsStore } from '../../../src/secrets/store.js';
 import { createDbSecretsRepo } from '../../../src/secrets/db-repo.js';
@@ -92,30 +92,10 @@ describe('phase 6 e2e: dashboard issue-key → authenticate /mcp → revoke → 
     const m = await migratedDb(pgFixture.url);
     pool = m.pool;
 
-    // Provision tenant + user via SECURITY DEFINER (avoids direct INSERT into tenants).
-    const seedClient = await pool.connect();
-    try {
-      await seedClient.query('SET ROLE app_role');
-      const tenantRow = await seedClient.query<{ tenant_id: string }>(
-        `SELECT * FROM resolve_or_provision_tenant($1, $2)`,
-        ['e2e_dk_sub', 'e2e-dk@example.com'],
-      );
-      tenantId = tenantRow.rows[0]!.tenant_id;
-    } finally {
-      seedClient.release();
-    }
-
-    // Seed user row so the session subject resolves correctly.
-    const userSeed = await pool.connect();
-    try {
-      const r = await userSeed.query<{ id: string }>(
-        `SELECT id FROM users WHERE tenant_id = $1 LIMIT 1`,
-        [tenantId],
-      );
-      userId = r.rows[0]?.id ?? '00000000-0000-0000-0000-000000000001';
-    } finally {
-      userSeed.release();
-    }
+    // Provision tenant + owner user via local-auth signup_tenant (SECURITY DEFINER).
+    const seeded = await seedTenantOwner(pool, 'e2e-dk@example.com', 'x-not-a-real-hash');
+    tenantId = seeded.tenant_id;
+    userId = seeded.user_id;
 
     // Seed Openprovider account + encrypted password under RLS context.
     await runAsTenant(pool, tenantId, async (client) => {

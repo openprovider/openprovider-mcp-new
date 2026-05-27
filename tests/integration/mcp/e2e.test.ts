@@ -6,13 +6,10 @@ import type { FastifyInstance } from 'fastify';
 import type { AddressInfo } from 'node:net';
 
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
-import { migratedDb, runAsTenant } from '../_helpers/db.js';
-import { createFakeJwks, type FakeJwks } from '../_helpers/fake-jwks.js';
+import { migratedDb, runAsTenant, seedTenantOwner } from '../_helpers/db.js';
 import { issueApiKey, createApiKeyResolver } from '../../../src/auth/api-key.js';
 
 import { createMcpServer } from '../../../src/mcp/transport.js';
-import { createWorkOsVerifier } from '../../../src/auth/oauth/workos.js';
-import { createTenantResolver } from '../../../src/auth/tenant-resolver.js';
 import { createFakeKms } from '../../../src/secrets/fake-kms.js';
 import { createSecretsStore } from '../../../src/secrets/store.js';
 import { createDbSecretsRepo } from '../../../src/secrets/db-repo.js';
@@ -65,60 +62,54 @@ import {
 } from '../../../src/policies/idempotency.js';
 import { createPricing, DRIFT_TOLERANCE } from '../../../src/policies/pricing.js';
 
-const TENANT_A = '00000000-0000-0000-0000-0000000000a1';
-const TENANT_B = '00000000-0000-0000-0000-0000000000b1';
+// Tenant ids are assigned at seed time by signup_tenant (SECURITY DEFINER).
+let TENANT_A = '';
+let TENANT_B = '';
 
-// oauth_subject values seeded into users rows for scenarios 1-2.
-const SUB_TENANT_A = 'sub_tenant_a';
-const SUB_TENANT_B = 'sub_tenant_b';
+// API keys (op_live_…) used as the /mcp bearer for scenarios 1-2.
+let KEY_A = '';
+let KEY_B = '';
+
+/** Issue an mcp:read+mcp:write API key for a tenant under its RLS context. */
+async function issueTenantKey(pool: pg.Pool, tenantId: string, name: string): Promise<string> {
+  return runAsTenant(pool, tenantId, async (client) => {
+    const issued = await issueApiKey(client, {
+      tenantId,
+      name,
+      scopes: ['mcp:read', 'mcp:write'],
+    });
+    return issued.key;
+  });
+}
 
 describe('phase 2 end-to-end', () => {
   let pgFixture: PgFixture;
   let pool: pg.Pool;
-  let jwks: FakeJwks;
   let app: FastifyInstance;
   let baseUrl: string;
 
   beforeAll(async () => {
-    // Boot infra in parallel.
-    [pgFixture, jwks] = await Promise.all([startPostgres(), createFakeJwks()]);
-    jwks.install();
+    pgFixture = await startPostgres();
 
     const m = await migratedDb(pgFixture.url);
     pool = m.pool;
 
-    // Seed two tenants, each with an Openprovider account row and encrypted password.
+    // Seed two tenants (each with an owner) via local-auth signup_tenant, then
+    // attach an Openprovider account + encrypted password and issue an API key.
     const kms = createFakeKms();
 
-    // Insert tenants, openprovider_accounts, and users as superuser (bypasses RLS).
-    // The users rows link each oauth_subject to the correct pre-seeded tenant so that
-    // resolve_or_provision_tenant returns TENANT_A/TENANT_B (not a fresh auto-provisioned tenant)
-    // when scenarios 1-2 tokens are verified.
-    const seedClient = await pool.connect();
-    try {
-      await seedClient.query(
-        `INSERT INTO tenants (id, name) VALUES ($1, 'tenant-a'), ($2, 'tenant-b')`,
-        [TENANT_A, TENANT_B],
-      );
-      await seedClient.query(
-        `INSERT INTO openprovider_accounts (tenant_id, username)
-         VALUES ($1, 'user-a'), ($2, 'user-b')`,
-        [TENANT_A, TENANT_B],
-      );
-      // Seed users rows so resolve_or_provision_tenant finds the existing tenant.
-      await seedClient.query(
-        `INSERT INTO users (tenant_id, email, oauth_subject, role)
-         VALUES ($1, 'a@example.com', $3, 'owner'),
-                ($2, 'b@example.com', $4, 'owner')`,
-        [TENANT_A, TENANT_B, SUB_TENANT_A, SUB_TENANT_B],
-      );
-    } finally {
-      seedClient.release();
-    }
+    const seededA = await seedTenantOwner(pool, 'a@example.com', 'x-hash-a');
+    const seededB = await seedTenantOwner(pool, 'b@example.com', 'x-hash-b');
+    TENANT_A = seededA.tenant_id;
+    TENANT_B = seededB.tenant_id;
 
-    // Encrypt and store each tenant's openprovider.password via RLS context.
+    // Openprovider account rows + encrypted password via RLS context.
     for (const t of [TENANT_A, TENANT_B] as const) {
       await runAsTenant(pool, t, async (client) => {
+        await client.query(
+          `INSERT INTO openprovider_accounts (tenant_id, username) VALUES ($1, $2)`,
+          [t, `user-${t.slice(-1)}`],
+        );
         const store = createSecretsStore({
           kms,
           kmsKeyArn: 'fake-key',
@@ -127,6 +118,9 @@ describe('phase 2 end-to-end', () => {
         await store.put(t, 'openprovider.password', Buffer.from(`pw-${t.slice(-1)}`));
       });
     }
+
+    KEY_A = await issueTenantKey(pool, TENANT_A, 'tenant-a-key');
+    KEY_B = await issueTenantKey(pool, TENANT_B, 'tenant-b-key');
 
     // Build the dispatchFactory.
     const openproviderClient = createOpenproviderClient();
@@ -208,12 +202,6 @@ describe('phase 2 end-to-end', () => {
       }
     }
 
-    const verifier = createWorkOsVerifier({
-      clientId: jwks.audience,
-      issuer: jwks.issuer,
-      jwksUri: jwks.jwksUri,
-    });
-
     app = await createMcpServer({
       devToken: 'never-used-in-this-test',
       devPrincipal: {
@@ -224,8 +212,7 @@ describe('phase 2 end-to-end', () => {
         scopes: [],
         role: 'viewer',
       },
-      verifier,
-      resolveTenant: createTenantResolver(pool),
+      apiKeyResolver: createApiKeyResolver(pool),
       dispatchFactory,
     });
     await app.listen({ host: '127.0.0.1', port: 0 });
@@ -313,8 +300,8 @@ describe('phase 2 end-to-end', () => {
     mockOpenproviderLogin('jwt-a');
     mockCheckDomain('a.com');
 
-    // Token uses sub that maps to TENANT_A via the seeded users row.
-    const bearer = await jwks.mintToken({ sub: SUB_TENANT_A, email: 'a@example.com' });
+    // API key resolves to TENANT_A's service principal.
+    const bearer = KEY_A;
 
     const sid = await initializeSession(bearer);
     const body = (await callTool(sid, bearer, {
@@ -341,8 +328,8 @@ describe('phase 2 end-to-end', () => {
     mockOpenproviderLogin('jwt-b');
     mockCheckDomain('b.com');
 
-    // Token uses sub that maps to TENANT_B via the seeded users row.
-    const bearer = await jwks.mintToken({ sub: SUB_TENANT_B, email: 'b@example.com' });
+    // API key resolves to TENANT_B's service principal.
+    const bearer = KEY_B;
 
     const sid = await initializeSession(bearer);
     const body = (await callTool(sid, bearer, {
@@ -409,16 +396,20 @@ describe('phase 2 end-to-end', () => {
     expect(r.status).toBe(401);
   }, 30_000);
 
-  it('scenario 5: real-shaped token auto-provisions a tenant; check_domain reports not-connected, then succeeds after onboard', async () => {
+  it('scenario 5: freshly provisioned tenant (no OP creds) reports not-connected, then succeeds after onboard', async () => {
     const kms = createFakeKms();
 
-    // Mint a token with ONLY sub + email — no act.tnt, no mcp:* scopes.
-    const bearer = await jwks.mintToken({ sub: 'auto_user_1', email: 'auto1@example.com' });
+    // Provision a fresh tenant (owner via signup_tenant) with NO Openprovider account,
+    // and issue an API key for it. This replaces the old WorkOS auto-provision-on-init
+    // path (auto-provisioning is WorkOS-specific and no longer exists); the meaningful
+    // assertion — not-connected → onboard → connected — is preserved with API-key auth.
+    const seeded = await seedTenantOwner(pool, 'auto1@example.com', 'x-hash-auto');
+    const tenantId = seeded.tenant_id;
+    const bearer = await issueTenantKey(pool, tenantId, 'auto-key');
 
-    // Initialize session — this triggers resolve_or_provision_tenant, creating the tenant.
     const sid = await initializeSession(bearer);
 
-    // First call: tenant was auto-provisioned but has no Openprovider creds yet.
+    // First call: tenant has no Openprovider creds yet.
     const notConnected = (await callTool(sid, bearer, {
       domains: [{ name: 'auto', extension: 'com' }],
       with_price: false,
@@ -430,20 +421,6 @@ describe('phase 2 end-to-end', () => {
         (notConnected.error?.message ?? '').toLowerCase().includes('not connected') ||
         JSON.stringify(notConnected).toLowerCase().includes('not_connected'),
     ).toBe(true);
-
-    // Resolve the auto-provisioned tenant id using the SECURITY DEFINER fn.
-    const resolverClient = await pool.connect();
-    let tenantId: string;
-    try {
-      await resolverClient.query('SET ROLE app_role');
-      const r = await resolverClient.query<{ tenant_id: string }>(
-        'SELECT * FROM resolve_or_provision_tenant($1, $2)',
-        ['auto_user_1', 'auto1@example.com'],
-      );
-      tenantId = r.rows[0]!.tenant_id;
-    } finally {
-      resolverClient.release();
-    }
 
     expect(tenantId).toBeTruthy();
 
@@ -538,8 +515,9 @@ describe('phase 2 end-to-end', () => {
             if (!canonicalArgsHash(args, p.tenantId).equals(conf.argsHash)) {
               return { kind: 'error', code: 'validation_failed' };
             }
-            const callerRole: Role | '' = p.kind === 'user' ? p.role : '';
-            if (!conf.requiredApproverRoles.includes(callerRole as Role)) {
+            const callerRole: Role =
+              p.kind === 'user' ? p.role : p.scopes.includes('mcp:write') ? 'operator' : 'viewer';
+            if (!conf.requiredApproverRoles.includes(callerRole)) {
               return { kind: 'error', code: 'approver_role_required' };
             }
             // Re-price with fixed pricer (no drift possible in tests)
@@ -570,7 +548,8 @@ describe('phase 2 end-to-end', () => {
               const policy = await getPolicy(client, p.tenantId);
               const live = await liveSpendCents(client, p.tenantId);
               const estimatedCostCents = await fixedPricer.price(toolName);
-              const callerRole: Role = p.kind === 'user' ? p.role : 'viewer';
+              const callerRole: Role =
+                p.kind === 'user' ? p.role : p.scopes.includes('mcp:write') ? 'operator' : 'viewer';
               const decision = evaluate({
                 toolName,
                 args,
@@ -700,12 +679,7 @@ describe('phase 2 end-to-end', () => {
           scopes: [],
           role: 'viewer',
         },
-        verifier: createWorkOsVerifier({
-          clientId: jwks.audience,
-          issuer: jwks.issuer,
-          jwksUri: jwks.jwksUri,
-        }),
-        resolveTenant: createTenantResolver(pool),
+        apiKeyResolver: createApiKeyResolver(pool),
         dispatchFactory: p4DispatchFactory,
       });
       await p4App.listen({ host: '127.0.0.1', port: 0 });
@@ -789,32 +763,22 @@ describe('phase 2 end-to-end', () => {
       email: string,
       limitEur: number,
     ): Promise<{ tenantId: string; bearer: string; sid: string }> {
-      const bearer = await jwks.mintToken({ sub, email });
-      // Initialize a session — this triggers resolve_or_provision_tenant.
+      // Provision a tenant via signup_tenant and issue an API key (operator scopes).
+      const seeded = await seedTenantOwner(pool, email, `x-hash-${sub}`);
+      const tenantId = seeded.tenant_id;
+      const bearer = await issueTenantKey(pool, tenantId, `${sub}-key`);
       const sid = await p4InitSession(bearer);
 
-      // Resolve the provisioned tenant id via the SECURITY DEFINER fn.
-      const resolverClient = await pool.connect();
-      let tenantId: string;
-      try {
-        await resolverClient.query('SET ROLE app_role');
-        const r = await resolverClient.query<{ tenant_id: string }>(
-          'SELECT * FROM resolve_or_provision_tenant($1, $2)',
-          [sub, email],
-        );
-        tenantId = r.rows[0]!.tenant_id;
-      } finally {
-        resolverClient.release();
-      }
-
-      // Raise spend cap and add phase4.spend to the policy's tools map.
+      // Raise spend cap and add phase4.spend to the policy's tools map. The API-key
+      // caller is an 'operator' principal, so allow operator approval for phase4.spend
+      // (its confirm flow is the focus of these scenarios).
       await runAsTenant(pool, tenantId, async (c) => {
         await upsertPolicy(c, tenantId, {
           ...DEFAULT_POLICY,
           spend_caps: { window: 'month', limit_eur: limitEur },
           tools: {
             ...DEFAULT_POLICY.tools,
-            'phase4.spend': 'confirm',
+            'phase4.spend': { mode: 'confirm', approvers: ['operator'] },
           },
         });
       });
@@ -1029,8 +993,9 @@ describe('phase 2 end-to-end', () => {
             if (!canonicalArgsHash(args, p.tenantId).equals(conf.argsHash)) {
               return { kind: 'error', code: 'validation_failed' };
             }
-            const callerRole: Role | '' = p.kind === 'user' ? p.role : '';
-            if (!conf.requiredApproverRoles.includes(callerRole as Role)) {
+            const callerRole: Role =
+              p.kind === 'user' ? p.role : p.scopes.includes('mcp:write') ? 'operator' : 'viewer';
+            if (!conf.requiredApproverRoles.includes(callerRole)) {
               return { kind: 'error', code: 'approver_role_required' };
             }
             // Re-price with real pricing (Nock intercepts the upstream checkDomain).
@@ -1060,7 +1025,8 @@ describe('phase 2 end-to-end', () => {
               const live = await liveSpendCents(client, p.tenantId);
               const opToken = await tokenManagerSafeToken(p.tenantId);
               const estimatedCostCents = await pricing.price(toolName, args, opToken);
-              const callerRole: Role = p.kind === 'user' ? p.role : 'viewer';
+              const callerRole: Role =
+                p.kind === 'user' ? p.role : p.scopes.includes('mcp:write') ? 'operator' : 'viewer';
               const tldsInArgs: string[] = [];
               if (toolName === 'register_domain' || toolName === 'update_domain') {
                 const a = args as { domain?: { extension: string } };
@@ -1230,12 +1196,7 @@ describe('phase 2 end-to-end', () => {
           scopes: [],
           role: 'viewer',
         },
-        verifier: createWorkOsVerifier({
-          clientId: jwks.audience,
-          issuer: jwks.issuer,
-          jwksUri: jwks.jwksUri,
-        }),
-        resolveTenant: createTenantResolver(pool),
+        apiKeyResolver: createApiKeyResolver(pool),
         dispatchFactory: p5DispatchFactory,
       });
       await p5App.listen({ host: '127.0.0.1', port: 0 });
@@ -1308,7 +1269,7 @@ describe('phase 2 end-to-end', () => {
     }
 
     /**
-     * Provision a fresh tenant on the p5 server: auto-provision via JWT,
+     * Provision a fresh tenant on the p5 server: signup_tenant + issue API key,
      * seed Openprovider creds, raise the spend cap, and return identifiers.
      */
     async function p5ProvisionTenant(
@@ -1316,22 +1277,10 @@ describe('phase 2 end-to-end', () => {
       email: string,
       limitEur: number,
     ): Promise<{ tenantId: string; bearer: string; sid: string }> {
-      const bearer = await jwks.mintToken({ sub, email });
+      const seeded = await seedTenantOwner(pool, email, `x-hash-${sub}`);
+      const tenantId = seeded.tenant_id;
+      const bearer = await issueTenantKey(pool, tenantId, `${sub}-key`);
       const sid = await p5InitSession(bearer);
-
-      // Resolve the auto-provisioned tenant id.
-      const resolverClient = await pool.connect();
-      let tenantId: string;
-      try {
-        await resolverClient.query('SET ROLE app_role');
-        const r = await resolverClient.query<{ tenant_id: string }>(
-          'SELECT * FROM resolve_or_provision_tenant($1, $2)',
-          [sub, email],
-        );
-        tenantId = r.rows[0]!.tenant_id;
-      } finally {
-        resolverClient.release();
-      }
 
       // Seed Openprovider account row + encrypted password (mirrors scenario 5 onboarding).
       const kmsLocal = createFakeKms();
@@ -1348,10 +1297,17 @@ describe('phase 2 end-to-end', () => {
         });
         await store.put(tenantId, 'openprovider.password', Buffer.from(`pw-${sub}`));
 
-        // Raise spend cap. DEFAULT_POLICY already has register_domain:'confirm'.
+        // Raise spend cap. The /mcp caller is an API-key 'operator' principal, so set
+        // register_domain's approvers to include 'operator' (its confirm flow is the
+        // focus of these scenarios; owner-required approval is exercised via the dashboard
+        // confirmations route + Task 13's local-auth RBAC e2e).
         await upsertPolicy(c, tenantId, {
           ...DEFAULT_POLICY,
           spend_caps: { window: 'month', limit_eur: limitEur },
+          tools: {
+            ...DEFAULT_POLICY.tools,
+            register_domain: { mode: 'confirm', approvers: ['operator'] },
+          },
         });
       });
 
@@ -1714,19 +1670,10 @@ describe('phase 2 end-to-end', () => {
     let issuedKeyId: string;
 
     beforeAll(async () => {
-      // Provision a tenant via resolve_or_provision_tenant (SECURITY DEFINER) —
-      // same pattern as p4/p5 tests; avoids direct INSERT into tenants (which needs RLS context).
-      const seedClient = await pool.connect();
-      try {
-        await seedClient.query('SET ROLE app_role');
-        const r = await seedClient.query<{ tenant_id: string }>(
-          `SELECT * FROM resolve_or_provision_tenant($1, $2)`,
-          ['p6_service_sub', 'p6service@example.com'],
-        );
-        tenantP6 = r.rows[0]!.tenant_id;
-      } finally {
-        seedClient.release();
-      }
+      // Provision a tenant via signup_tenant (SECURITY DEFINER) — same pattern as
+      // p4/p5 tests; avoids direct INSERT into tenants (which needs RLS context).
+      const seeded = await seedTenantOwner(pool, 'p6service@example.com', 'x-hash-p6');
+      tenantP6 = seeded.tenant_id;
 
       // Seed openprovider_accounts inside a proper RLS-scoped transaction.
       await runAsTenant(pool, tenantP6, async (client) => {
