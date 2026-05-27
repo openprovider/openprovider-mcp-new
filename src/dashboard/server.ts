@@ -61,7 +61,7 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
   });
 
   // GET /dashboard/login — render the email+password login form
-  app.get('/dashboard/login', (_req, reply) => reply.view('login', { error: null }));
+  app.get('/dashboard/login', (_req, reply) => reply.view('login', { error: null, notice: null }));
 
   // POST /dashboard/login — authenticate and set session
   // TODO(phase8): per-IP login rate limit (needs @fastify/rate-limit registered app-wide before dashboard mount)
@@ -70,7 +70,7 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
     const r = await deps.login((email ?? '').trim().toLowerCase(), password ?? '');
     if (!r.ok) {
       void reply.code(401);
-      return reply.view('login', { error: 'Invalid email or password' });
+      return reply.view('login', { error: 'Invalid email or password', notice: null });
     }
     setSession(reply, { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email });
     return reply.redirect('/dashboard');
