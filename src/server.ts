@@ -38,6 +38,12 @@ import { createGetDomainAuthcodeTool } from './tools/get-domain-authcode.js';
 import { createResetDomainAuthcodeTool } from './tools/reset-domain-authcode.js';
 import { createApproveDomainTransferTool } from './tools/approve-domain-transfer.js';
 import { createSendFoa1DomainTransferTool } from './tools/send-foa1-domain-transfer.js';
+import { createDeleteDomainTool } from './tools/delete-domain.js';
+import { createRestartDomainOperationTool } from './tools/restart-domain-operation.js';
+import { createRenewDomainTool } from './tools/renew-domain.js';
+import { createTransferDomainTool } from './tools/transfer-domain.js';
+import { createTradeDomainTool } from './tools/trade-domain.js';
+import { createRestoreDomainTool } from './tools/restore-domain.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -322,6 +328,12 @@ async function main(): Promise<void> {
         createResetDomainAuthcodeTool({ client: openproviderClient, tokenManager }),
         createApproveDomainTransferTool({ client: openproviderClient, tokenManager }),
         createSendFoa1DomainTransferTool({ client: openproviderClient, tokenManager }),
+        createDeleteDomainTool({ client: openproviderClient, tokenManager }),
+        createRestartDomainOperationTool({ client: openproviderClient, tokenManager }),
+        createRenewDomainTool({ client: openproviderClient, tokenManager }),
+        createTransferDomainTool({ client: openproviderClient, tokenManager }),
+        createTradeDomainTool({ client: openproviderClient, tokenManager }),
+        createRestoreDomainTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.

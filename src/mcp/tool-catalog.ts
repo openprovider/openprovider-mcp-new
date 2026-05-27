@@ -20,6 +20,12 @@ import { createGetDomainAuthcodeTool } from '../tools/get-domain-authcode.js';
 import { createResetDomainAuthcodeTool } from '../tools/reset-domain-authcode.js';
 import { createApproveDomainTransferTool } from '../tools/approve-domain-transfer.js';
 import { createSendFoa1DomainTransferTool } from '../tools/send-foa1-domain-transfer.js';
+import { createDeleteDomainTool } from '../tools/delete-domain.js';
+import { createRestartDomainOperationTool } from '../tools/restart-domain-operation.js';
+import { createRenewDomainTool } from '../tools/renew-domain.js';
+import { createTransferDomainTool } from '../tools/transfer-domain.js';
+import { createTradeDomainTool } from '../tools/trade-domain.js';
+import { createRestoreDomainTool } from '../tools/restore-domain.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -59,6 +65,12 @@ export function buildToolCatalog(): ToolEntry[] {
     createResetDomainAuthcodeTool({ client: stubClient, tokenManager: stubTokenManager }),
     createApproveDomainTransferTool({ client: stubClient, tokenManager: stubTokenManager }),
     createSendFoa1DomainTransferTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRestartDomainOperationTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRenewDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createTransferDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createTradeDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRestoreDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({

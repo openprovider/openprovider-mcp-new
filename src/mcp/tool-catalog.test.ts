@@ -24,6 +24,12 @@ describe('buildToolCatalog', () => {
         'reset_domain_authcode',
         'approve_domain_transfer',
         'send_foa1_domain_transfer',
+        'delete_domain',
+        'restart_domain_operation',
+        'renew_domain',
+        'transfer_domain',
+        'trade_domain',
+        'restore_domain',
       ].sort(),
     );
     for (const t of cat) {
@@ -32,9 +38,9 @@ describe('buildToolCatalog', () => {
     }
   });
 
-  it('returns 17 tools', () => {
+  it('returns 23 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(17);
+    expect(cat).toHaveLength(23);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {
