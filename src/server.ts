@@ -17,6 +17,8 @@ import { registerPolicy } from './dashboard/routes/policy.js';
 import { registerKeys } from './dashboard/routes/keys.js';
 import { registerAudit } from './dashboard/routes/audit.js';
 import { registerConfirmations } from './dashboard/routes/confirmations.js';
+import { registerUsers } from './dashboard/routes/users.js';
+import { registerAccept } from './dashboard/routes/accept.js';
 import { createPgAuditSink } from './audit/pg-sink.js';
 import { createCheckDomainTool } from './tools/check-domain.js';
 import { createListDomainsTool } from './tools/list-domains.js';
@@ -429,10 +431,7 @@ async function main(): Promise<void> {
       };
     },
 
-    resolveTenant: async (subject: string, email: string) => {
-      const t = await resolveTenant(subject, email);
-      return { tenantId: t.tenantId, userId: t.userId };
-    },
+    resolveTenant,
 
     // Tasks 7–8 page routes.
     registerPages: (pageApp) => {
@@ -447,6 +446,8 @@ async function main(): Promise<void> {
         kmsKeyName: cfg.gcpKmsKeyName,
         openproviderClient,
       });
+      registerUsers(pageApp, { pool });
+      registerAccept(pageApp, { pool });
     },
   });
 

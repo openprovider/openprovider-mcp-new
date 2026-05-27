@@ -64,6 +64,7 @@ function makeSession(overrides: Partial<DashboardSession> = {}): DashboardSessio
     tenantId: '',
     userId: '',
     subject: 'e2e-dk-subject',
+    role: 'owner',
     csrf: CSRF_TOKEN,
     ...overrides,
   };
@@ -255,7 +256,12 @@ describe('phase 6 e2e: dashboard issue-key → authenticate /mcp → revoke → 
         email: 'e2e-dk@example.com',
         subject: 'e2e-dk-subject',
       }),
-      resolveTenant: async () => ({ tenantId, userId }),
+      resolveTenant: async () => ({
+        status: 'resolved' as const,
+        tenantId,
+        userId,
+        role: 'owner' as const,
+      }),
       registerPages: (pageApp) => {
         registerOverview(pageApp, { pool });
         registerOpenprovider(pageApp, { pool, kms, kmsKeyName });

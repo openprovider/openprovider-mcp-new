@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import type { Kms } from '../../secrets/kms.js';
-import { requireSession, assertCsrf } from '../session.js';
+import { requireRole, assertCsrf } from '../session.js';
 import type { DashboardSession } from '../session.js';
 import { withTenantConn } from '../with-tenant-conn.js';
 import { onboardCredentials } from '../../tenants/onboard-credentials.js';
@@ -11,7 +11,7 @@ export function registerOpenprovider(
   deps: { pool: pg.Pool; kms: Kms; kmsKeyName: string },
 ): void {
   // GET /dashboard/openprovider — render form (username pre-filled, password blank)
-  app.get('/dashboard/openprovider', { preHandler: requireSession }, async (req, reply) => {
+  app.get('/dashboard/openprovider', { preHandler: requireRole('owner') }, async (req, reply) => {
     const session = (req as typeof req & { session: DashboardSession }).session;
 
     const username = await withTenantConn(deps.pool, session.tenantId, async (client) => {
@@ -33,7 +33,7 @@ export function registerOpenprovider(
   });
 
   // POST /dashboard/openprovider — persist credentials
-  app.post('/dashboard/openprovider', { preHandler: requireSession }, async (req, reply) => {
+  app.post('/dashboard/openprovider', { preHandler: requireRole('owner') }, async (req, reply) => {
     if (!assertCsrf(req)) {
       return reply.code(403).send('Forbidden: CSRF token mismatch');
     }

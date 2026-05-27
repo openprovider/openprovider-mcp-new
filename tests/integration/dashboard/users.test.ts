@@ -5,10 +5,19 @@ import type pg from 'pg';
 import type { FastifyInstance } from 'fastify';
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
 import { migratedDb, runAsTenant } from '../_helpers/db.js';
+import { createFakeKms } from '../../../src/secrets/fake-kms.js';
 import { registerDashboard } from '../../../src/dashboard/server.js';
 import { registerUsers } from '../../../src/dashboard/routes/users.js';
 import { registerAccept } from '../../../src/dashboard/routes/accept.js';
+import { registerOverview } from '../../../src/dashboard/routes/overview.js';
+import { registerOpenprovider } from '../../../src/dashboard/routes/openprovider.js';
+import { registerPolicy } from '../../../src/dashboard/routes/policy.js';
+import { registerKeys } from '../../../src/dashboard/routes/keys.js';
+import { registerAudit } from '../../../src/dashboard/routes/audit.js';
+import { registerConfirmations } from '../../../src/dashboard/routes/confirmations.js';
+import { createOpenproviderClient } from '../../../src/openprovider/client.js';
 import type { DashboardSession } from '../../../src/dashboard/session.js';
+import { proposeConfirmation } from '../../../src/policies/repo.js';
 
 const SECRET = 'users-page-secret-32-characters!!';
 const CSRF = 'users-csrf-fixed';
@@ -23,9 +32,20 @@ describe('dashboard users page', () => {
   let app: FastifyInstance;
   let tenantId: string;
   let ownerUserId: string;
+  const kms = createFakeKms();
+  const kmsKeyName = 'fake-key';
+  const openproviderClient = createOpenproviderClient();
 
   function ownerSession(overrides: Partial<DashboardSession> = {}): DashboardSession {
-    return { tenantId, userId: ownerUserId, subject: 'users_owner', role: 'owner', csrf: CSRF, email: 'users-owner@example.com', ...overrides };
+    return {
+      tenantId,
+      userId: ownerUserId,
+      subject: 'users_owner',
+      role: 'owner',
+      csrf: CSRF,
+      email: 'users-owner@example.com',
+      ...overrides,
+    };
   }
 
   beforeAll(async () => {
@@ -50,11 +70,26 @@ describe('dashboard users page', () => {
     await registerDashboard(app, {
       cookieSecret: SECRET,
       buildAuthorizationUrl: () => 'https://auth.example.com/login',
-      authenticateWithCode: async () => ({ userId: ownerUserId, email: 'users-owner@example.com', subject: 'users_owner' }),
-      resolveTenant: async () => ({ status: 'resolved' as const, tenantId, userId: ownerUserId, role: 'owner' as const }),
+      authenticateWithCode: async () => ({
+        userId: ownerUserId,
+        email: 'users-owner@example.com',
+        subject: 'users_owner',
+      }),
+      resolveTenant: async () => ({
+        status: 'resolved' as const,
+        tenantId,
+        userId: ownerUserId,
+        role: 'owner' as const,
+      }),
       registerPages: (pageApp) => {
         registerUsers(pageApp, { pool });
         registerAccept(pageApp, { pool });
+        registerOverview(pageApp, { pool });
+        registerOpenprovider(pageApp, { pool, kms, kmsKeyName });
+        registerPolicy(pageApp, { pool });
+        registerKeys(pageApp, { pool });
+        registerAudit(pageApp, { pool });
+        registerConfirmations(pageApp, { pool, kms, kmsKeyName, openproviderClient });
       },
     });
     await app.ready();
@@ -67,7 +102,11 @@ describe('dashboard users page', () => {
   });
 
   it('GET /dashboard/users renders the owner in the member list', async () => {
-    const res = await app.inject({ method: 'GET', url: '/dashboard/users', headers: { cookie: cookie(ownerSession()) } });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/dashboard/users',
+      headers: { cookie: cookie(ownerSession()) },
+    });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Team');
     expect(res.body).toContain('users-owner@example.com');
@@ -77,8 +116,12 @@ describe('dashboard users page', () => {
 
   it('POST invite with bad CSRF → 403', async () => {
     const res = await app.inject({
-      method: 'POST', url: '/dashboard/users/invite',
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: '/dashboard/users/invite',
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: '_csrf=WRONG&email=teammate@example.com&role=operator',
     });
     expect(res.statusCode).toBe(403);
@@ -86,8 +129,12 @@ describe('dashboard users page', () => {
 
   it('POST invite creates a pending invite and shows the accept link once', async () => {
     const res = await app.inject({
-      method: 'POST', url: '/dashboard/users/invite',
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: '/dashboard/users/invite',
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}&email=teammate@example.com&role=operator`,
     });
     expect(res.statusCode).toBe(200);
@@ -104,8 +151,12 @@ describe('dashboard users page', () => {
 
   it('POST invite for an email that is already a user is rejected', async () => {
     const res = await app.inject({
-      method: 'POST', url: '/dashboard/users/invite',
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: '/dashboard/users/invite',
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}&email=users-owner@example.com&role=viewer`,
     });
     expect(res.statusCode).toBe(200);
@@ -113,14 +164,22 @@ describe('dashboard users page', () => {
   });
 
   it('a viewer is 403 on GET /dashboard/users', async () => {
-    const res = await app.inject({ method: 'GET', url: '/dashboard/users', headers: { cookie: cookie(ownerSession({ role: 'viewer' })) } });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/dashboard/users',
+      headers: { cookie: cookie(ownerSession({ role: 'viewer' })) },
+    });
     expect(res.statusCode).toBe(403);
   });
 
   it('POST invite for an email that already has a pending invite → friendly duplicate error', async () => {
     const res = await app.inject({
-      method: 'POST', url: '/dashboard/users/invite',
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: '/dashboard/users/invite',
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}&email=teammate@example.com&role=viewer`,
     });
     expect(res.statusCode).toBe(200);
@@ -140,10 +199,11 @@ describe('dashboard users page', () => {
     const c = await pool.connect();
     try {
       await c.query('SET ROLE app_role');
-      const r = await c.query<{ user_id: string }>(
-        'SELECT * FROM accept_invitation($1,$2,$3)',
-        [token, subject, email],
-      );
+      const r = await c.query<{ user_id: string }>('SELECT * FROM accept_invitation($1,$2,$3)', [
+        token,
+        subject,
+        email,
+      ]);
       return r.rows[0]!.user_id;
     } finally {
       await c.query('RESET ROLE');
@@ -154,8 +214,12 @@ describe('dashboard users page', () => {
   it('change-role: owner promotes an operator to admin', async () => {
     const uid = await seedMember('promote@example.com', 'operator', 'promote_sub');
     const res = await app.inject({
-      method: 'POST', url: `/dashboard/users/${uid}/role`,
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: `/dashboard/users/${uid}/role`,
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}&role=admin`,
     });
     expect(res.statusCode).toBe(200);
@@ -167,28 +231,45 @@ describe('dashboard users page', () => {
 
   it('change-role: an admin cannot modify an owner (403)', async () => {
     const adminId = await seedMember('admin1@example.com', 'admin', 'admin1_sub');
-    const adminSession = ownerSession({ role: 'admin', userId: adminId, subject: 'admin1_sub', email: 'admin1@example.com' });
+    const adminSession = ownerSession({
+      role: 'admin',
+      userId: adminId,
+      subject: 'admin1_sub',
+      email: 'admin1@example.com',
+    });
     const res = await app.inject({
-      method: 'POST', url: `/dashboard/users/${ownerUserId}/role`,
-      headers: { cookie: cookie(adminSession), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: `/dashboard/users/${ownerUserId}/role`,
+      headers: {
+        cookie: cookie(adminSession),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}&role=viewer`,
     });
     expect(res.statusCode).toBe(403);
     await runAsTenant(pool, tenantId, async (client) => {
-      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [ownerUserId]);
+      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [
+        ownerUserId,
+      ]);
       expect(r.rows[0]!.role).toBe('owner');
     });
   });
 
   it('change-role: demoting the last owner is rejected', async () => {
     const res = await app.inject({
-      method: 'POST', url: `/dashboard/users/${ownerUserId}/role`,
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: `/dashboard/users/${ownerUserId}/role`,
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}&role=admin`,
     });
     expect(res.statusCode).toBe(400);
     await runAsTenant(pool, tenantId, async (client) => {
-      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [ownerUserId]);
+      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [
+        ownerUserId,
+      ]);
       expect(r.rows[0]!.role).toBe('owner');
     });
   });
@@ -205,28 +286,43 @@ describe('dashboard users page', () => {
       keyId = r.rows[0]!.id;
     });
     const res = await app.inject({
-      method: 'POST', url: `/dashboard/users/${uid}/remove`,
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: `/dashboard/users/${uid}/remove`,
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}`,
     });
     expect(res.statusCode).toBe(200);
     await runAsTenant(pool, tenantId, async (client) => {
-      const u = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [uid]);
+      const u = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [
+        uid,
+      ]);
       expect(u.rows[0]!.status).toBe('deleted');
-      const k = await client.query<{ revoked_at: Date | null }>(`SELECT revoked_at FROM api_keys WHERE id = $1`, [keyId]);
+      const k = await client.query<{ revoked_at: Date | null }>(
+        `SELECT revoked_at FROM api_keys WHERE id = $1`,
+        [keyId],
+      );
       expect(k.rows[0]!.revoked_at).not.toBeNull();
     });
   });
 
   it('remove: removing the last owner is rejected', async () => {
     const res = await app.inject({
-      method: 'POST', url: `/dashboard/users/${ownerUserId}/remove`,
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: `/dashboard/users/${ownerUserId}/remove`,
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}`,
     });
     expect(res.statusCode).toBe(400);
     await runAsTenant(pool, tenantId, async (client) => {
-      const r = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [ownerUserId]);
+      const r = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [
+        ownerUserId,
+      ]);
       expect(r.rows[0]!.status).toBe('active');
     });
   });
@@ -234,15 +330,26 @@ describe('dashboard users page', () => {
   it('change-role: an admin may demote a peer admin (lateral management allowed)', async () => {
     const peerId = await seedMember('peeradmin@example.com', 'admin', 'peeradmin_sub');
     const actorId = await seedMember('actoradmin@example.com', 'admin', 'actoradmin_sub');
-    const actorSession = ownerSession({ role: 'admin', userId: actorId, subject: 'actoradmin_sub', email: 'actoradmin@example.com' });
+    const actorSession = ownerSession({
+      role: 'admin',
+      userId: actorId,
+      subject: 'actoradmin_sub',
+      email: 'actoradmin@example.com',
+    });
     const res = await app.inject({
-      method: 'POST', url: `/dashboard/users/${peerId}/role`,
-      headers: { cookie: cookie(actorSession), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: `/dashboard/users/${peerId}/role`,
+      headers: {
+        cookie: cookie(actorSession),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}&role=operator`,
     });
     expect(res.statusCode).toBe(200);
     await runAsTenant(pool, tenantId, async (client) => {
-      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [peerId]);
+      const r = await client.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [
+        peerId,
+      ]);
       expect(r.rows[0]!.role).toBe('operator');
     });
   });
@@ -258,8 +365,12 @@ describe('dashboard users page', () => {
       inviteId = r.rows[0]!.id;
     });
     const res = await app.inject({
-      method: 'POST', url: `/dashboard/invitations/${inviteId}/revoke`,
-      headers: { cookie: cookie(ownerSession()), 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      url: `/dashboard/invitations/${inviteId}/revoke`,
+      headers: {
+        cookie: cookie(ownerSession()),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       payload: `_csrf=${CSRF}`,
     });
     expect(res.statusCode).toBe(200);
@@ -269,6 +380,106 @@ describe('dashboard users page', () => {
         [inviteId],
       );
       expect(r.rows[0]!.count).toBe('0');
+    });
+  });
+
+  it('viewer is 403 on /dashboard/policy and /dashboard/keys but 200 on /dashboard (overview)', async () => {
+    const viewer = ownerSession({ role: 'viewer' });
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/policy',
+          headers: { cookie: cookie(viewer) },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/keys',
+          headers: { cookie: cookie(viewer) },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (await app.inject({ method: 'GET', url: '/dashboard', headers: { cookie: cookie(viewer) } }))
+        .statusCode,
+    ).toBe(200);
+  });
+
+  it('admin is allowed on /dashboard/policy + /dashboard/keys but 403 on /dashboard/openprovider (owner-only creds)', async () => {
+    const admin = ownerSession({ role: 'admin' });
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/policy',
+          headers: { cookie: cookie(admin) },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/keys',
+          headers: { cookie: cookie(admin) },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/openprovider',
+          headers: { cookie: cookie(admin) },
+        })
+      ).statusCode,
+    ).toBe(403);
+  });
+
+  it('confirmations: an admin cannot consume an owner-only confirmation', async () => {
+    const adminId = await seedMember('confadmin@example.com', 'admin', 'confadmin_sub');
+    let confId = '';
+    await runAsTenant(pool, tenantId, async (client) => {
+      const rec = await proposeConfirmation({
+        client,
+        tenantId,
+        principalSubject: 'users_owner',
+        toolName: 'check_domain',
+        args: { domain: 'admincheck.com' },
+        summaryText: 'check_domain (est. €0.00)',
+        estimatedCostCents: 0,
+        requiredApproverRoles: ['owner'],
+        ttlMs: 10 * 60 * 1000,
+      });
+      confId = rec.id;
+    });
+    const adminSession = ownerSession({
+      role: 'admin',
+      userId: adminId,
+      subject: 'confadmin_sub',
+      email: 'confadmin@example.com',
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/dashboard/confirmations/${confId}/approve`,
+      headers: {
+        cookie: cookie(adminSession),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      payload: `_csrf=${CSRF}`,
+    });
+    expect(res.statusCode).toBe(200); // route always re-renders
+    // The owner-only confirmation must NOT have been consumed by an admin.
+    await runAsTenant(pool, tenantId, async (client) => {
+      const r = await client.query<{ consumed_at: Date | null }>(
+        `SELECT consumed_at FROM confirmations WHERE id = $1`,
+        [confId],
+      );
+      expect(r.rows[0]!.consumed_at).toBeNull();
     });
   });
 });

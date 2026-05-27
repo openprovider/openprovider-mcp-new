@@ -56,6 +56,7 @@ function makeSession(overrides: Partial<DashboardSession> = {}): DashboardSessio
     tenantId: TENANT,
     userId: USER_ID,
     subject: 'test-subject-manage',
+    role: 'owner',
     csrf: CSRF_TOKEN,
     ...overrides,
   };
@@ -149,7 +150,12 @@ describe('dashboard pages-manage integration', () => {
         email: 'manage@example.com',
         subject: 'test-subject-manage',
       }),
-      resolveTenant: async () => ({ tenantId: TENANT, userId: USER_ID }),
+      resolveTenant: async () => ({
+        status: 'resolved' as const,
+        tenantId: TENANT,
+        userId: USER_ID,
+        role: 'owner' as const,
+      }),
       registerPages: (pageApp) => {
         registerOverview(pageApp, { pool });
         registerOpenprovider(pageApp, { pool, kms, kmsKeyName });

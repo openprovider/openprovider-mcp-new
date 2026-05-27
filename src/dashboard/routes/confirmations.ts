@@ -9,7 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import type { Kms } from '../../secrets/kms.js';
 import type { OpenproviderClient } from '../../openprovider/client.js';
-import { requireSession, assertCsrf } from '../session.js';
+import { requireSession, requireRole, assertCsrf } from '../session.js';
 import type { DashboardSession } from '../session.js';
 import { withTenantConn } from '../with-tenant-conn.js';
 import type { Principal } from '../../auth/principal.js';
@@ -186,7 +186,7 @@ export function registerConfirmations(app: FastifyInstance, deps: ConfirmationsD
   // POST /dashboard/confirmations/:id/approve — run same consume path as confirm_pending
   app.post(
     '/dashboard/confirmations/:id/approve',
-    { preHandler: requireSession },
+    { preHandler: requireRole('owner', 'admin') },
     async (req, reply) => {
       if (!assertCsrf(req)) {
         return reply.code(403).send('Forbidden: CSRF token mismatch');
@@ -195,14 +195,16 @@ export function registerConfirmations(app: FastifyInstance, deps: ConfirmationsD
       const session = (req as typeof req & { session: DashboardSession }).session;
       const { id } = req.params as { id: string };
 
-      // Build a principal from the session — dashboard users are always 'owner'
+      // Build a principal from the session. The approver's real role drives the
+      // requiredApproverRoles check in the consume path (operator/viewer can't reach
+      // this route; an admin must not approve an owner-only confirmation).
       const principal: Principal = {
         kind: 'user',
         tenantId: session.tenantId,
         userId: session.userId,
         subject: session.subject,
         scopes: ['mcp:read', 'mcp:write'],
-        role: 'owner',
+        role: session.role,
       };
 
       let approveResult: { kind: 'ok' | 'error'; message: string };
