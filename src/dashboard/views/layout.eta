@@ -25,6 +25,7 @@
   <a href="/dashboard/keys">API Keys</a>
   <a href="/dashboard/audit">Audit</a>
   <a href="/dashboard/confirmations">Confirmations</a>
+  <a href="/dashboard/users">Team</a>
   <form method="post" action="/dashboard/logout">
     <button type="submit">Logout</button>
   </form>
