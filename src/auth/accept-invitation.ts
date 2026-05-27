@@ -6,19 +6,17 @@ export type AcceptStatus =
   | 'invalid_token'
   | 'already_accepted'
   | 'expired'
-  | 'email_mismatch'
-  | 'already_member';
+  | 'email_taken';
 
 export type AcceptResult =
-  | { status: 'accepted'; tenantId: string; userId: string; role: Role }
+  | { status: 'accepted'; tenantId: string; userId: string; role: Role; email: string }
   | { status: Exclude<AcceptStatus, 'accepted'> };
 
 /** Calls the accept_invitation SECURITY DEFINER function. Never throws for expected validation failures. */
 export async function acceptInvitation(
   pool: pg.Pool,
   token: string,
-  subject: string,
-  email: string,
+  passwordHash: string,
 ): Promise<AcceptResult> {
   const client = await pool.connect();
   try {
@@ -28,11 +26,12 @@ export async function acceptInvitation(
       tenant_id: string | null;
       user_id: string | null;
       role: string | null;
-    }>('SELECT * FROM accept_invitation($1,$2,$3)', [token, subject, email]);
+      email: string | null;
+    }>('SELECT * FROM accept_invitation($1, $2)', [token, passwordHash]);
     const row = r.rows[0];
     if (!row) throw new Error('accept_invitation returned no row');
     if (row.status === 'accepted') {
-      return { status: 'accepted', tenantId: row.tenant_id!, userId: row.user_id!, role: row.role as Role };
+      return { status: 'accepted', tenantId: row.tenant_id!, userId: row.user_id!, role: row.role as Role, email: row.email! };
     }
     return { status: row.status };
   } finally {

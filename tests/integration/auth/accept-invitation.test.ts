@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
-import { migratedDb, runAsTenant } from '../_helpers/db.js';
+import { migratedDb, runAsTenant, seedTenantOwner } from '../_helpers/db.js';
 import { acceptInvitation, emailHasUser } from '../../../src/auth/accept-invitation.js';
 
 describe('accept-invitation wrappers', () => {
@@ -13,18 +13,8 @@ describe('accept-invitation wrappers', () => {
     fixture = await startPostgres();
     const m = await migratedDb(fixture.url);
     pool = m.pool;
-    const c = await pool.connect();
-    try {
-      await c.query('SET ROLE app_role');
-      const r = await c.query<{ tenant_id: string }>(
-        'SELECT * FROM resolve_or_provision_tenant($1,$2)',
-        ['aiw_owner', 'aiw-owner@example.com'],
-      );
-      tenantId = r.rows[0]!.tenant_id;
-    } finally {
-      await c.query('RESET ROLE');
-      c.release();
-    }
+    const seed = await seedTenantOwner(pool, 'aiw-owner@example.com');
+    tenantId = seed.tenant_id;
     await runAsTenant(pool, tenantId, async (client) => {
       await client.query(
         `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
@@ -44,24 +34,26 @@ describe('accept-invitation wrappers', () => {
     expect(await emailHasUser(pool, 'ghost@example.com')).toBe(false);
   });
 
-  it('acceptInvitation returns accepted + tenant + role for a valid token+email', async () => {
-    const res = await acceptInvitation(pool, 'aiw-tok', 'aiw-invitee-sub', 'aiw-invitee@example.com');
+  it('acceptInvitation returns accepted + tenantId + role + email for a valid token', async () => {
+    const res = await acceptInvitation(pool, 'aiw-tok', 'some-hash');
     expect(res.status).toBe('accepted');
     if (res.status === 'accepted') {
       expect(res.tenantId).toBe(tenantId);
       expect(res.role).toBe('admin');
+      expect(res.email).toBe('aiw-invitee@example.com');
     }
   });
 
-  it('acceptInvitation surfaces email_mismatch as a non-accepted status', async () => {
+  it('acceptInvitation surfaces email_taken when invite email already belongs to an active user', async () => {
+    // Insert an invite for the owner's email (already an active user)
     await runAsTenant(pool, tenantId, async (client) => {
       await client.query(
         `INSERT INTO invitations (tenant_id, email, role, token, expires_at)
-         VALUES ($1, 'aiw-mm@example.com', 'viewer', 'aiw-mm-tok', now() + interval '7 days')`,
+         VALUES ($1, 'aiw-owner@example.com', 'viewer', 'aiw-et-tok', now() + interval '7 days')`,
         [tenantId],
       );
     });
-    const res = await acceptInvitation(pool, 'aiw-mm-tok', 'mm-sub', 'wrong@example.com');
-    expect(res.status).toBe('email_mismatch');
+    const res = await acceptInvitation(pool, 'aiw-et-tok', 'some-hash');
+    expect(res.status).toBe('email_taken');
   });
 });
