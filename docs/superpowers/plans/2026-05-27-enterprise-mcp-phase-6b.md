@@ -155,8 +155,8 @@ CREATE POLICY invitations_isolation ON invitations
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON invitations TO app_role;
 
-CREATE UNIQUE INDEX invitations_pending_email ON invitations (email) WHERE accepted_at IS NULL;
-CREATE INDEX invitations_token ON invitations (token);
+CREATE UNIQUE INDEX invitations_pending_email ON invitations (tenant_id, email) WHERE accepted_at IS NULL;
+CREATE UNIQUE INDEX invitations_token ON invitations (token);
 ```
 
 - [ ] **Step 4: Append the journal entry** — in `migrations/meta/_journal.json`, add as the last element of `entries` (note the comma after the previous `0011` entry):

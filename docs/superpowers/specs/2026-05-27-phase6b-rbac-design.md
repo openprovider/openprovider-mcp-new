@@ -37,8 +37,8 @@ CREATE POLICY invitations_isolation ON invitations
   USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
 GRANT SELECT, INSERT, UPDATE, DELETE ON invitations TO app_role;
-CREATE UNIQUE INDEX invitations_pending_email ON invitations (email) WHERE accepted_at IS NULL;
-CREATE INDEX invitations_token ON invitations (token);
+CREATE UNIQUE INDEX invitations_pending_email ON invitations (tenant_id, email) WHERE accepted_at IS NULL;
+CREATE UNIQUE INDEX invitations_token ON invitations (token);
 ```
 
 Journal entry `idx: 11, tag: 0012_invitations`. `role` excludes `owner` — you can't invite a second owner (ownership transfer is out of scope). Drizzle mirror `invitations` added to `src/db/schema.ts`.

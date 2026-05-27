@@ -168,3 +168,17 @@ export const auditArchives = pgTable('audit_archives', {
   lastRowHash: bytea('last_row_hash').notNull(),
   sealedAt: timestamp('sealed_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const invitations = pgTable('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  email: text('email').notNull(),
+  role: text('role').notNull(),
+  token: text('token').notNull(),
+  createdByUserId: uuid('created_by_user_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+});
