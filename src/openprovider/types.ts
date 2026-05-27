@@ -141,3 +141,81 @@ export const UpdateContactArgs = z
   .object({ id: z.number().int().positive() })
   .merge(CreateContactArgs.partial());
 export type UpdateContactArgs = z.infer<typeof UpdateContactArgs>;
+
+// ---------------------------------------------------------------------------
+// Domain-lifecycle schemas — batch 1 (Phase enterprise)
+// ---------------------------------------------------------------------------
+
+const DomainRef = z.object({ name: z.string().min(1), extension: z.string().min(1) });
+
+export const DomainIdArg = z.object({ id: z.number().int().positive() });
+export type DomainIdArg = z.infer<typeof DomainIdArg>;
+
+export const SuggestDomainArgs = z.object({
+  name: z.string().min(1),
+  tlds: z.array(z.string()).optional(),
+  language: z.string().optional(),
+  limit: z.number().int().positive().max(100).optional(),
+  provider: z.string().optional(),
+  sensitive: z.boolean().optional(),
+});
+export type SuggestDomainArgs = z.infer<typeof SuggestDomainArgs>;
+
+export const ResetAuthcodeArgs = z.object({
+  id: z.number().int().positive(),
+  domain: DomainRef.optional(),
+  auth_code_type: z.enum(['internal', 'registry']).optional(),
+  sending_type: z.string().optional(),
+});
+export type ResetAuthcodeArgs = z.infer<typeof ResetAuthcodeArgs>;
+
+export const ApproveTransferArgs = z.object({
+  id: z.number().int().positive(),
+  approve: z.union([z.literal(0), z.literal(1)]).optional(),
+  auth_code: z.string().optional(),
+  domain: DomainRef.optional(),
+  registrar_tag: z.string().optional(),
+});
+export type ApproveTransferArgs = z.infer<typeof ApproveTransferArgs>;
+
+export const RenewDomainArgs = z.object({
+  id: z.number().int().positive(),
+  period: z.number().int().positive(),
+  domain: DomainRef.optional(),
+});
+export type RenewDomainArgs = z.infer<typeof RenewDomainArgs>;
+
+export const TransferDomainArgs = z.object({
+  domain: DomainRef,
+  auth_code: z.string().min(1),
+  owner_handle: z.string().min(1),
+  admin_handle: z.string().optional(),
+  tech_handle: z.string().optional(),
+  billing_handle: z.string().optional(),
+  ns_group: z.string().optional(),
+});
+export type TransferDomainArgs = z.infer<typeof TransferDomainArgs>;
+
+export const TradeDomainArgs = z.object({
+  domain: DomainRef,
+  auth_code: z.string().min(1),
+  owner_handle: z.string().min(1),
+  admin_handle: z.string().optional(),
+  tech_handle: z.string().optional(),
+  billing_handle: z.string().optional(),
+  ns_group: z.string().optional(),
+});
+export type TradeDomainArgs = z.infer<typeof TradeDomainArgs>;
+
+export const RestoreDomainArgs = z.object({
+  id: z.number().int().positive(),
+  domain: DomainRef.optional(),
+});
+export type RestoreDomainArgs = z.infer<typeof RestoreDomainArgs>;
+
+export const RestartDomainOperationArgs = z.object({
+  id: z.number().int().positive(),
+  auth_code: z.string().optional(),
+  domain: DomainRef.optional(),
+});
+export type RestartDomainOperationArgs = z.infer<typeof RestartDomainOperationArgs>;
