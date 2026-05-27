@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.0-phase6] — 2026-05-27
+
+### Added
+- API-key authentication: `api_keys` table + `resolve_api_key` SECURITY DEFINER + the `op_live_` path (argon2id), producing a `service` Principal. Keys issued single-show; revoke/expiry enforced.
+- Service principals map to an effective policy role (`mcp:write` → `operator`, else `viewer`); they can never approve confirmations.
+- Single-owner dashboard (Fastify + eta + htmx, WorkOS hosted login + signed-cookie session + CSRF): overview, Openprovider credential onboarding, policy editor, API-key issue/list/revoke, audit-log viewer + NDJSON export, pending-confirmation approval.
+- Shared `onboard-credentials` helper used by both the `tenant:onboard` CLI and the dashboard form.
+
+### Changed
+- Upgraded Fastify 4 → 5 (and `@fastify/rate-limit` → 10) — required by the `@fastify/cookie`/`@fastify/view`/`@fastify/static` plugin majors; full suite green on Fastify 5.
+
+### Deferred
+- Multi-user invitation + full RBAC (Phase 6b — dashboard is single-owner).
+- SSO/SAML/SCIM; dashboard theming; API-key scope narrowing in the UI.
+
 ## [0.7.0-phase7] — 2026-05-26
 
 ### Added

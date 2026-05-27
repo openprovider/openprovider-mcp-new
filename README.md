@@ -1,9 +1,10 @@
-# Openprovider MCP — Enterprise (v0.7.0 Phase 7: GCP KMS migration + audit hash chain + GCS sealing)
+# Openprovider MCP — Enterprise (v0.8.0 Phase 6: API-key auth + single-owner dashboard)
 
-A multi-tenant SaaS MCP server for Openprovider. **Phase 7 migrates secrets/KMS from AWS KMS to GCP KMS (single-cloud) and adds a tamper-evident per-tenant audit hash chain** with a `verify-chain` CLI and an `audit:seal` CLI that flushes sealed archives to GCS under a locked retention policy. Phase 5 shipped the five write tools (`register_domain`, `update_domain`, `create_contact`, `update_contact`, `delete_contact`) on Phase 4's confirmation machinery. Phase 4 shipped the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting. Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
+A multi-tenant SaaS MCP server for Openprovider. **Phase 6 ships `op_live_` API-key authentication (argon2id, `api_keys` table, `resolve_api_key` SECURITY DEFINER) and a single-owner server-rendered dashboard** (Fastify + eta + htmx, WorkOS hosted login) for credential onboarding, policy editing, API-key management, audit viewing, and confirmation approval. Phase 7 migrated secrets/KMS from AWS KMS to GCP KMS (single-cloud) and added a tamper-evident per-tenant audit hash chain. Phase 5 shipped the five write tools (`register_domain`, `update_domain`, `create_contact`, `update_contact`, `delete_contact`) on Phase 4's confirmation machinery. Phase 4 shipped the policy engine, content-bound confirmation flow, and atomic spend-reservation accounting. Phase 3 completed real WorkOS AuthKit authentication and the four read tools. Phase 2 shipped the first vertical slice: OAuth, discovery, MCP SDK transport, Openprovider HTTP client, per-tenant token manager, audit pipeline, and `check_domain`.
 
 ## Status
 
+- Phase 6 complete: `v0.8.0-phase6` tag.
 - Phase 7 complete: `v0.7.0-phase7` tag.
 - Phase 5 complete: `v0.6.0-phase5` tag.
 - Phase 4 complete: `v0.5.0-phase4` tag.
@@ -15,15 +16,17 @@ A multi-tenant SaaS MCP server for Openprovider. **Phase 7 migrates secrets/KMS 
 
 - **Spec:** `docs/superpowers/specs/2026-05-21-enterprise-mcp-design.md`
 - **Phase 3 auth spec:** `docs/superpowers/specs/2026-05-26-phase3-auth-tenant-mapping-design.md`
+- **Phase 4 spec:** `docs/superpowers/specs/2026-05-26-phase4-policy-confirmations-design.md`
 - **Phase 5 spec:** `docs/superpowers/specs/2026-05-26-phase5-write-tools-design.md`
+- **Phase 6 spec:** `docs/superpowers/specs/2026-05-26-phase6-dashboard-design.md`
 - **Phase 7 spec:** `docs/superpowers/specs/2026-05-26-phase7-gcp-and-audit-chain-design.md`
 - **Phase roadmap:** `docs/superpowers/plans/2026-05-21-enterprise-mcp-roadmap.md`
 - **Phase 1 plan:** `docs/superpowers/plans/2026-05-21-enterprise-mcp-phase-1-foundation.md`
 - **Phase 2 plan:** `docs/superpowers/plans/2026-05-22-enterprise-mcp-phase-2-vertical-slice.md`
 - **Phase 3 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-3.md`
 - **Phase 4 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-4.md`
-- **Phase 4 spec:** `docs/superpowers/specs/2026-05-26-phase4-policy-confirmations-design.md`
 - **Phase 5 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-5.md`
+- **Phase 6 plan:** `docs/superpowers/plans/2026-05-27-enterprise-mcp-phase-6.md`
 - **Phase 7 plan:** `docs/superpowers/plans/2026-05-26-enterprise-mcp-phase-7.md`
 - **WorkOS dev project decision:** `docs/superpowers/decisions/2026-05-22-workos-dev-project.md` (created during Phase 2 Task 1)
 - **Legacy v0.1 server:** archived on the `legacy/v0.1` branch.
@@ -108,13 +111,50 @@ A minimal policy that allows billable writes up to €100/month:
 
 Real WorkOS AuthKit tokens are now accepted. On first login the server atomically provisions a tenant and owner user — no pre-seeding required. Each WorkOS user maps 1:1 to a tenant via `users.oauth_subject`.
 
-Before a tenant can call Openprovider tools, their Openprovider credentials must be onboarded:
+Before a tenant can call Openprovider tools, their Openprovider credentials must be onboarded via the dashboard (see below) or the CLI:
 
 ```bash
 npm run tenant:onboard -- --tenant <uuid> --username <op-user> --password <pass>
 ```
 
 `<uuid>` is the `tenant_id` returned by `resolve_or_provision_tenant` (visible in the DB after the user's first login).
+
+## Dashboard
+
+Phase 6 ships a single-owner server-rendered dashboard mounted at `/dashboard` on the same Fastify server. Authentication uses WorkOS hosted login (redirect to WorkOS → callback sets a signed cookie session).
+
+### Pages
+
+| Path | Description |
+|---|---|
+| `/dashboard` | Overview — Openprovider connection status, active policy spend cap, live spend |
+| `/dashboard/openprovider` | Openprovider credential onboarding — username + password form (encrypts via GCP KMS, same path as the CLI) |
+| `/dashboard/policy` | Policy editor — JSON textarea with Zod validation; inline errors on bad input |
+| `/dashboard/keys` | API-key management — issue keys (plaintext shown once), list with prefix/name/last-used/status, revoke |
+| `/dashboard/audit` | Audit log viewer — paginated table with event-type + tool filters; NDJSON export |
+| `/dashboard/confirmations` | Pending confirmation approval — lists unexpired confirmations, approve drives the same consume path as `confirm_pending` |
+
+All state-changing POSTs are CSRF-protected (signed-cookie token round-trip).
+
+> **Single-owner:** The dashboard is provisioned for a single owner per tenant. Multi-user invitation and full RBAC are deferred to Phase 6b.
+
+## API Keys
+
+Phase 6 introduces `op_live_` API keys as an alternative to WorkOS AuthKit tokens for `/mcp` access.
+
+- Keys are issued via the **dashboard keys page** (`/dashboard/keys`). The plaintext is shown exactly once at issuance and is never stored — only an argon2id hash is persisted.
+- Key format: `op_live_<base64url-random>` (first 12 characters form the lookup prefix).
+- Use as a bearer token: `Authorization: Bearer op_live_<key>`.
+- Keys produce a `service` Principal. Effective policy role: `mcp:write` scope → `operator`; otherwise `viewer`. Service principals cannot approve confirmations.
+- Keys can be revoked or given an expiry; revoked/expired keys are rejected at resolve time.
+
+```bash
+curl -H "Authorization: Bearer op_live_<your-key>" \
+     -H 'content-type: application/json' \
+     -H 'accept: application/json, text/event-stream' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+     http://localhost:3000/mcp
+```
 
 ## Local development
 
@@ -142,6 +182,18 @@ Phase 7 uses GCP as the sole cloud provider (AWS has been removed). Set these in
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to a service-account JSON key (omit when using Workload Identity / ADC) |
 
 For local development, `fake-gcs-server` replaces LocalStack. The `docker-compose.dev.yml` starts it on port `4443`. Set `STORAGE_EMULATOR_HOST=http://localhost:4443` to point the GCS client at the local emulator.
+
+### Dashboard environment variables
+
+| Variable | Description |
+|---|---|
+| `DASHBOARD_COOKIE_SECRET` | Secret used to sign the `op_dash` session cookie (min 32 chars; generate with `openssl rand -hex 32`) |
+
+The dashboard uses WorkOS hosted login — the existing `WORKOS_CLIENT_ID` and `WORKOS_CLIENT_SECRET` vars apply. Set `WORKOS_REDIRECT_URI` to `http://localhost:3000/dashboard/login/callback` in your WorkOS sandbox project.
+
+### Fastify version
+
+Phase 6 upgraded **Fastify 4 → 5** (and `@fastify/rate-limit` → 10) — required by the `@fastify/cookie`, `@fastify/view`, and `@fastify/static` plugin majors used by the dashboard. The full test suite is green on Fastify 5.
 
 ### Audit commands
 
