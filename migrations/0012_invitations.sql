@@ -129,3 +129,20 @@ $$;
 
 REVOKE ALL ON FUNCTION accept_invitation(text, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION accept_invitation(text, text, text) TO app_role;
+
+CREATE FUNCTION email_has_user(p_email text)
+  RETURNS boolean
+  LANGUAGE sql
+  SECURITY DEFINER
+  SET search_path = public
+AS $$
+  -- disabled users still own their email/subject; only hard-deleted rows are excluded
+  -- so a removed user's email (status='deleted') can be re-invited.
+  SELECT EXISTS (
+    SELECT 1 FROM users
+     WHERE lower(email) = lower(p_email) AND status <> 'deleted'
+  );
+$$;
+
+REVOKE ALL ON FUNCTION email_has_user(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION email_has_user(text) TO app_role;

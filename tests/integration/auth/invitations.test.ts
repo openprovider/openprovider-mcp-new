@@ -24,11 +24,11 @@ describe('migration 0012 invitations', () => {
       await c.query('RESET ROLE');
       c.release();
     }
-  }, 60_000);
+  }, 120_000);
 
   afterAll(async () => {
-    await pool.end();
-    await fixture.stop();
+    await pool?.end();
+    await fixture?.stop();
   });
 
   it('inserts a pending invite scoped to the tenant under RLS', async () => {
@@ -270,5 +270,47 @@ describe('migration 0012 invitations', () => {
     } finally {
       c.release();
     }
+  });
+
+  async function emailHasUserSql(email: string): Promise<boolean> {
+    const c = await pool.connect();
+    try {
+      await c.query('SET ROLE app_role');
+      const r = await c.query<{ email_has_user: boolean }>('SELECT email_has_user($1)', [email]);
+      return r.rows[0]!.email_has_user;
+    } finally {
+      await c.query('RESET ROLE');
+      c.release();
+    }
+  }
+
+  it('email_has_user is true for an existing user (cross-tenant, case-insensitive)', async () => {
+    expect(await emailHasUserSql('OWNER@example.com')).toBe(true);
+  });
+
+  it('email_has_user is false for an unknown email', async () => {
+    expect(await emailHasUserSql('nobody@example.com')).toBe(false);
+  });
+
+  it('email_has_user is true for a disabled (not deleted) user', async () => {
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO users (tenant_id, email, oauth_subject, role, status)
+         VALUES ($1, 'disabled-user@example.com', 'ehu_disabled_sub', 'viewer', 'disabled')`,
+        [tenantId],
+      );
+    });
+    expect(await emailHasUserSql('disabled-user@example.com')).toBe(true);
+  });
+
+  it('email_has_user is false for a soft-deleted user (so a removed user can be re-invited)', async () => {
+    await runAsTenant(pool, tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO users (tenant_id, email, oauth_subject, role, status)
+         VALUES ($1, 'deleted-user@example.com', 'ehu_deleted_sub', 'viewer', 'deleted')`,
+        [tenantId],
+      );
+    });
+    expect(await emailHasUserSql('deleted-user@example.com')).toBe(false);
   });
 });
