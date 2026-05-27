@@ -64,3 +64,29 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION find_user_by_email(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION find_user_by_email(text) TO app_role;
+
+DROP FUNCTION IF EXISTS accept_invitation(text, text, text);
+
+CREATE FUNCTION accept_invitation(p_token text, p_password_hash text)
+  RETURNS TABLE (status text, tenant_id uuid, user_id uuid, role text, email text)
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE v_inv invitations%ROWTYPE; v_uid uuid;
+BEGIN
+  SELECT * INTO v_inv FROM invitations WHERE token = p_token;
+  IF NOT FOUND THEN RETURN QUERY SELECT 'invalid_token'::text, NULL::uuid, NULL::uuid, NULL::text, NULL::text; RETURN; END IF;
+  IF v_inv.accepted_at IS NOT NULL THEN RETURN QUERY SELECT 'already_accepted'::text, NULL::uuid, NULL::uuid, NULL::text, NULL::text; RETURN; END IF;
+  IF v_inv.expires_at <= now() THEN RETURN QUERY SELECT 'expired'::text, NULL::uuid, NULL::uuid, NULL::text, NULL::text; RETURN; END IF;
+  IF EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v_inv.email) AND u.status <> 'deleted') THEN
+    RETURN QUERY SELECT 'email_taken'::text, NULL::uuid, NULL::uuid, NULL::text, NULL::text; RETURN;
+  END IF;
+  UPDATE invitations SET accepted_at = now() WHERE id = v_inv.id AND accepted_at IS NULL;
+  IF NOT FOUND THEN RETURN QUERY SELECT 'already_accepted'::text, NULL::uuid, NULL::uuid, NULL::text, NULL::text; RETURN; END IF;
+  INSERT INTO users (tenant_id, email, password_hash, role)
+    VALUES (v_inv.tenant_id, v_inv.email, p_password_hash, v_inv.role)
+    RETURNING id INTO v_uid;
+  RETURN QUERY SELECT 'accepted'::text, v_inv.tenant_id, v_uid, v_inv.role, v_inv.email;
+END;
+$$;
+REVOKE ALL ON FUNCTION accept_invitation(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION accept_invitation(text, text) TO app_role;
