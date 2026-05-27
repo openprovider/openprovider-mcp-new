@@ -17,6 +17,9 @@ import { createListPendingConfirmationsTool } from '../tools/list-pending-confir
 import { createConfirmPendingTool } from '../tools/confirm-pending.js';
 import { createSuggestDomainTool } from '../tools/suggest-domain.js';
 import { createGetDomainAuthcodeTool } from '../tools/get-domain-authcode.js';
+import { createResetDomainAuthcodeTool } from '../tools/reset-domain-authcode.js';
+import { createApproveDomainTransferTool } from '../tools/approve-domain-transfer.js';
+import { createSendFoa1DomainTransferTool } from '../tools/send-foa1-domain-transfer.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -53,6 +56,9 @@ export function buildToolCatalog(): ToolEntry[] {
     }),
     createSuggestDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
     createGetDomainAuthcodeTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createResetDomainAuthcodeTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createApproveDomainTransferTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createSendFoa1DomainTransferTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({
