@@ -147,4 +147,14 @@ describe('resolveToolMode', () => {
     expect(isReadTool('check_domain')).toBe(true);
     expect(isReadTool('create_contact')).toBe(false);
   });
+
+  it('isReadTool matches read prefixes', () => {
+    expect(isReadTool('suggest_domain')).toBe(true);
+    expect(isReadTool('get_domain_authcode')).toBe(true);
+    expect(isReadTool('list_dns_zones')).toBe(true);
+    expect(isReadTool('check_domain')).toBe(true);
+    expect(isReadTool('list_pending_confirmations')).toBe(true);
+    expect(isReadTool('renew_domain')).toBe(false);
+    expect(isReadTool('delete_domain')).toBe(false);
+  });
 });
