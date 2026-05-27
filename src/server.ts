@@ -5,6 +5,7 @@ import { startOtel } from './observability/otel.js';
 import { createLogger } from './observability/logger.js';
 import { createDb } from './db/client.js';
 import { createGcpKms } from './secrets/gcp-kms.js';
+import { createFakeKms } from './secrets/fake-kms.js';
 import { createApiKeyResolver } from './auth/api-key.js';
 import type { Principal } from './auth/principal.js';
 import { createDispatcher, type ConfirmDeps, type DispatcherTool } from './mcp/dispatch.js';
@@ -70,7 +71,10 @@ async function main(): Promise<void> {
   });
 
   const { pool } = createDb({ connectionString: cfg.databaseUrl });
-  const kms = createGcpKms({ keyName: cfg.gcpKmsKeyName });
+  const kms = cfg.useFakeKms ? createFakeKms() : createGcpKms({ keyName: cfg.gcpKmsKeyName });
+  if (cfg.useFakeKms) {
+    logger.warn({ event: 'kms.fake' }, 'USE_FAKE_KMS=true — using in-memory fake KMS (local dev only)');
+  }
 
   const devPrincipal: Principal = {
     kind: 'user',

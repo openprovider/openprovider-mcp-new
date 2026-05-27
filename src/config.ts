@@ -11,6 +11,12 @@ const schema = z.object({
   DEV_BEARER_TOKEN: z.string().min(1),
   PORT: z.coerce.number().default(3000),
   DASHBOARD_COOKIE_SECRET: z.string().min(1),
+  // Local-dev only: swap real GCP KMS for the in-memory fake so the server boots
+  // without GCP creds. NEVER set this in production.
+  USE_FAKE_KMS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 export function loadConfig(
@@ -28,6 +34,7 @@ export function loadConfig(
     devBearerToken: parsed.DEV_BEARER_TOKEN,
     port: parsed.PORT,
     dashboardCookieSecret: parsed.DASHBOARD_COOKIE_SECRET,
+    useFakeKms: parsed.USE_FAKE_KMS,
   };
 }
 
