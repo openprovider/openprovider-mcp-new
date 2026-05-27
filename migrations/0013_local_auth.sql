@@ -90,3 +90,22 @@ END;
 $$;
 REVOKE ALL ON FUNCTION accept_invitation(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION accept_invitation(text, text) TO app_role;
+
+CREATE FUNCTION consume_password_reset(p_token text, p_password_hash text)
+  RETURNS TABLE (status text, user_id uuid)
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE v_pr password_resets%ROWTYPE;
+BEGIN
+  SELECT * INTO v_pr FROM password_resets WHERE token = p_token;
+  IF NOT FOUND THEN RETURN QUERY SELECT 'invalid_token'::text, NULL::uuid; RETURN; END IF;
+  IF v_pr.used_at IS NOT NULL THEN RETURN QUERY SELECT 'already_used'::text, NULL::uuid; RETURN; END IF;
+  IF v_pr.expires_at <= now() THEN RETURN QUERY SELECT 'expired'::text, NULL::uuid; RETURN; END IF;
+  UPDATE password_resets SET used_at = now() WHERE id = v_pr.id AND used_at IS NULL;
+  IF NOT FOUND THEN RETURN QUERY SELECT 'already_used'::text, NULL::uuid; RETURN; END IF;
+  UPDATE users SET password_hash = p_password_hash WHERE id = v_pr.user_id;
+  RETURN QUERY SELECT 'ok'::text, v_pr.user_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION consume_password_reset(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION consume_password_reset(text, text) TO app_role;
