@@ -138,6 +138,36 @@ All state-changing POSTs are CSRF-protected (signed-cookie token round-trip).
 
 > **Single-owner:** The dashboard is provisioned for a single owner per tenant. Multi-user invitation and full RBAC are deferred to Phase 6b.
 
+### Phase 6b — Team & RBAC
+
+Phase 6b adds multi-user invitations and a full owner/admin/operator/viewer RBAC model.
+
+**Invitations.** An owner or admin invites a teammate by email and role (admin, operator, or viewer — the owner role is never assignable via invitation). The dashboard generates a token'd accept link (`/dashboard/accept?token=…`) shown once in the UI. Email delivery is not yet automated — the inviting user shares the link manually.
+
+**Explicit accept with email match.** The invitee logs in via WorkOS and lands on the accept page. Accepting requires the logged-in WorkOS verified email to exactly match the invitation's email address. A leaked token alone cannot be redeemed by a different person.
+
+**One user = one tenant.** An email that already belongs to any existing user cannot be invited again. A WorkOS subject maps to exactly one tenant (enforced by `resolve_or_provision_tenant`'s `pending_invite` branch).
+
+**RBAC matrix.**
+
+| Surface | owner | admin | operator | viewer |
+|---|---|---|---|---|
+| Overview / audit (view) | ✓ | ✓ | ✓ | ✓ |
+| Openprovider creds (rotate) | ✓ | — | — | — |
+| Policy edit | ✓ | ✓ | — | — |
+| API keys issue/revoke | ✓ | ✓ | — | — |
+| Users/Team (invite/role/remove) | ✓ | ✓¹ | — | — |
+| Confirmations: view | ✓ | ✓ | ✓ | ✓ |
+| Confirmations: approve | ✓ | ✓ | — | — |
+| MCP read tools | ✓ | ✓ | ✓ | ✓ |
+| MCP write tools (propose) | ✓ | ✓ | ✓ | — |
+
+¹ An admin may manage operator/viewer/admin roles but cannot modify or remove an owner, nor grant the owner role.
+
+**Guards.** The dashboard enforces the matrix via a `requireRole` preHandler on every route. On the MCP/tool side, the per-user role is carried on the Principal; the confirmation `required_approver_roles` check means an operator can propose a write but only an owner or admin can approve it. A **last-owner guard** prevents demoting or removing the sole remaining owner. Removing a user also revokes all of their API keys.
+
+**Users/Team page.** `/dashboard/users` (owner + admin only) — lists current members with their roles, lists pending invitations, and provides controls to invite, change role, remove a member, or revoke a pending invite.
+
 ## API Keys
 
 Phase 6 introduces `op_live_` API keys as an alternative to WorkOS AuthKit tokens for `/mcp` access.

@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.0-phase6b] — 2026-05-27
+
+### Added
+- Multi-user invitations: migration 0012 adds the `invitations` table plus `accept_invitation` and `email_has_user` SECURITY DEFINER functions; `resolve_or_provision_tenant` gains a `pending_invite` branch that maps an accepting WorkOS subject into the correct tenant without re-provisioning.
+- Token'd email-invite flow: the dashboard generates a single-show accept link (`/dashboard/accept?token=…`); acceptance requires the logged-in WorkOS verified email to match the invitation's email — a leaked token cannot be redeemed by a different identity.
+- Full owner / admin / operator / viewer RBAC: the dashboard enforces the matrix via a `requireRole` preHandler on each privileged route (overview, audit, and confirmation-viewing stay open to all roles); the MCP side enforces it via the per-user role on the Principal and the confirmation `required_approver_roles` check (operator may propose a write; only owner/admin may approve).
+- Users/Team page (`/dashboard/users`): list members + pending invites, invite by email + role, change role, remove member (also revokes that member's API keys), revoke a pending invite.
+- Last-owner guard: demoting or removing the sole remaining owner is rejected at the route layer.
+
+### Tests
+- Unit: RBAC helpers, `requireRole` preHandler, legacy-cookie rejection.
+- Integration: invitations SQL (`accept_invitation`, `email_has_user`), users-page routes, cross-route RBAC enforcement.
+- Two-user e2e: operator proposes a write tool call, owner approves via `confirm_pending`.
+
+### Deferred
+- Email delivery (invites are shared as manual links for now).
+- WorkOS Organizations / SSO / SCIM (out of scope).
+
 ## [0.8.0-phase6] — 2026-05-27
 
 ### Added
