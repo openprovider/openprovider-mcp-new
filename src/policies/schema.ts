@@ -55,13 +55,20 @@ export const DEFAULT_POLICY: PolicyDoc = {
 
 const DEFAULT_APPROVERS: Role[] = ['owner', 'admin'];
 
-function ruleFor(policy: PolicyDoc, tool: string): z.infer<typeof ToolRule> | undefined {
+export function ruleFor(policy: PolicyDoc, tool: string): z.infer<typeof ToolRule> | undefined {
   if (policy.tools[tool] !== undefined) return policy.tools[tool];
-  // wildcard: longest matching prefix ending in '*'
-  for (const [key, rule] of Object.entries(policy.tools)) {
-    if (key.endsWith('*') && tool.startsWith(key.slice(0, -1))) return rule;
+  // wildcard: pick the wildcard key whose prefix is the longest match for the tool name
+  let bestKey: string | undefined;
+  let bestLen = -1;
+  for (const key of Object.keys(policy.tools)) {
+    if (!key.endsWith('*')) continue;
+    const prefix = key.slice(0, -1);
+    if (tool.startsWith(prefix) && prefix.length > bestLen) {
+      bestKey = key;
+      bestLen = prefix.length;
+    }
   }
-  return undefined;
+  return bestKey !== undefined ? policy.tools[bestKey] : undefined;
 }
 
 export function toolMode(policy: PolicyDoc, tool: string): Mode | 'deny' {

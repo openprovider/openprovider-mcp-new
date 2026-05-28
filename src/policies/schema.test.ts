@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PolicyDoc, DEFAULT_POLICY, requiredApproverRoles, toolMode } from './schema.js';
+import { PolicyDoc, DEFAULT_POLICY, requiredApproverRoles, toolMode, ruleFor } from './schema.js';
 
 describe('policy schema', () => {
   it('parses the default policy', () => {
@@ -33,5 +33,22 @@ describe('policy schema', () => {
     expect(() =>
       PolicyDoc.parse({ ...DEFAULT_POLICY, spend_caps: { window: 'year', limit_eur: 1 } }),
     ).toThrow();
+  });
+});
+
+describe('ruleFor longest-prefix wildcard matching', () => {
+  const tools = { 'get_*': 'allow', 'get_secret_*': 'confirm', delete_domain: 'confirm' };
+  const policy = { tools } as unknown as Parameters<typeof ruleFor>[0];
+
+  it('exact match wins over any wildcard', () => {
+    expect(ruleFor(policy, 'delete_domain')).toBe('confirm');
+  });
+
+  it('longest matching wildcard wins (get_secret_* beats get_*)', () => {
+    expect(ruleFor(policy, 'get_secret_value')).toBe('confirm');
+  });
+
+  it('falls back to the broad wildcard when no longer prefix matches', () => {
+    expect(ruleFor(policy, 'get_domain')).toBe('allow');
   });
 });
