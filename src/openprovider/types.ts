@@ -219,3 +219,122 @@ export const RestartDomainOperationArgs = z.object({
   domain: DomainRef.optional(),
 });
 export type RestartDomainOperationArgs = z.infer<typeof RestartDomainOperationArgs>;
+
+// ---------------------------------------------------------------------------
+// DNS schemas — batch 2 (Phase enterprise)
+// ---------------------------------------------------------------------------
+
+const DnsRecord = z.object({
+  name: z.string().optional(),
+  type: z.string().min(1),
+  value: z.string().min(1),
+  ttl: z.number().int().positive(),
+  prio: z.number().int().nonnegative().optional(),
+});
+
+const DnsTemplateRecord = z.object({
+  id: z.number().int().nonnegative().optional(),
+  name: z.string().optional(),
+  type: z.string().min(1),
+  value: z.string().min(1),
+  ttl: z.number().int().positive(),
+  prio: z.number().int().nonnegative().optional(),
+});
+
+const NsGroupMember = z.object({
+  id: z.number().int().nonnegative().optional(),
+  name: z.string().min(1),
+  ip: z.string().min(1),
+  ip6: z.string().optional(),
+  seq_nr: z.number().int().nonnegative(),
+});
+
+// path-only arg schemas
+export const ZoneNameArg = z.object({ name: z.string().min(1) });
+export type ZoneNameArg = z.infer<typeof ZoneNameArg>;
+
+export const NameserverNameArg = z.object({ name: z.string().min(1) });
+export type NameserverNameArg = z.infer<typeof NameserverNameArg>;
+
+export const NsGroupNameArg = z.object({ ns_group: z.string().min(1) });
+export type NsGroupNameArg = z.infer<typeof NsGroupNameArg>;
+
+export const TemplateIdArg = z.object({ id: z.number().int().positive() });
+export type TemplateIdArg = z.infer<typeof TemplateIdArg>;
+
+export const NoArgs = z.object({});
+export type NoArgs = z.infer<typeof NoArgs>;
+
+// zones
+export const CreateDnsZoneArgs = z.object({
+  domain: DomainRef,
+  provider: z.string().min(1),
+  type: z.enum(['master', 'slave']),
+  master_ip: z.string().optional(),
+  secured: z.boolean().optional(),
+  template_name: z.string().optional(),
+  is_spamexperts_enabled: z.boolean().optional(),
+  records: z.array(DnsRecord).optional(),
+});
+export type CreateDnsZoneArgs = z.infer<typeof CreateDnsZoneArgs>;
+
+export const UpdateDnsZoneArgs = z.object({
+  domain: DomainRef,
+  provider: z.string().min(1).optional(),
+  type: z.enum(['master', 'slave']).optional(),
+  master_ip: z.string().optional(),
+  secured: z.boolean().optional(),
+  dnskey: z.boolean().optional(),
+  template_name: z.string().optional(),
+  is_spamexperts_enabled: z.boolean().optional(),
+  records: z
+    .object({
+      add: z.array(DnsRecord).optional(),
+      remove: z.array(DnsRecord).optional(),
+    })
+    .optional(),
+});
+export type UpdateDnsZoneArgs = z.infer<typeof UpdateDnsZoneArgs>;
+
+// nameservers
+export const CreateNameserverArgs = z.object({
+  name: z.string().min(1),
+  ip: z.string().min(1),
+  ip6: z.string().optional(),
+});
+export type CreateNameserverArgs = z.infer<typeof CreateNameserverArgs>;
+
+export const UpdateNameserverArgs = z.object({
+  name: z.string().min(1),
+  ip: z.string().min(1),
+  ip6: z.string().optional(),
+});
+export type UpdateNameserverArgs = z.infer<typeof UpdateNameserverArgs>;
+
+// ns groups
+export const CreateNsGroupArgs = z.object({
+  ns_group: z.string().min(1),
+  name_servers: z.array(NsGroupMember).min(1),
+});
+export type CreateNsGroupArgs = z.infer<typeof CreateNsGroupArgs>;
+
+export const UpdateNsGroupArgs = z.object({
+  ns_group: z.string().min(1),
+  name_servers: z.array(NsGroupMember).min(1),
+});
+export type UpdateNsGroupArgs = z.infer<typeof UpdateNsGroupArgs>;
+
+// templates
+export const CreateDnsTemplateArgs = z.object({
+  name: z.string().min(1),
+  is_spamexperts_enabled: z.boolean().optional(),
+  records: z.array(DnsTemplateRecord).optional(),
+});
+export type CreateDnsTemplateArgs = z.infer<typeof CreateDnsTemplateArgs>;
+
+// domain token
+export const CreateDomainTokenArgs = z.object({
+  domain: z.string().min(1),
+  zone_provider: z.string().min(1),
+});
+export type CreateDomainTokenArgs = z.infer<typeof CreateDomainTokenArgs>;
