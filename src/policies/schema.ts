@@ -73,6 +73,9 @@ export const DEFAULT_POLICY: PolicyDoc = {
     create_csr: 'allow',
     decode_csr: 'allow',
     create_ssl_otp_token: 'allow',
+    create_customer: 'allow',
+    update_customer: 'allow',
+    delete_customer: 'confirm',
   },
   ip_allowlist: [],
 };

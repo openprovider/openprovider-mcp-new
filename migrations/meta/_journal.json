@@ -18,6 +18,7 @@
     { "idx": 13, "version": "5", "when": 1748900000000, "tag": "0014_domain_lifecycle_policy", "breakpoints": true },
     { "idx": 14, "version": "5", "when": 1749000000000, "tag": "0015_dns_policy", "breakpoints": true },
     { "idx": 15, "version": "5", "when": 1749100000000, "tag": "0016_tags_policy", "breakpoints": true },
-    { "idx": 16, "version": "5", "when": 1749200000000, "tag": "0017_ssl_policy", "breakpoints": true }
+    { "idx": 16, "version": "5", "when": 1749200000000, "tag": "0017_ssl_policy", "breakpoints": true },
+    { "idx": 17, "version": "5", "when": 1749300000000, "tag": "0018_customers_policy", "breakpoints": true }
   ]
 }
