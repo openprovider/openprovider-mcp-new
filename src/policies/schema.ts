@@ -61,6 +61,8 @@ export const DEFAULT_POLICY: PolicyDoc = {
     create_dns_template: 'allow',
     delete_dns_template: 'confirm',
     create_domain_token: 'allow',
+    create_tag: 'allow',
+    delete_tag: 'confirm',
   },
   ip_allowlist: [],
 };
