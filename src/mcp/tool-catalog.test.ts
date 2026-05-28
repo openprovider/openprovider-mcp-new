@@ -57,6 +57,21 @@ describe('buildToolCatalog', () => {
         'list_tags',
         'create_tag',
         'delete_tag',
+        'list_ssl_products',
+        'get_ssl_product',
+        'list_ssl_orders',
+        'get_ssl_order',
+        'get_ssl_approver_emails',
+        'update_ssl_order',
+        'update_ssl_approver_email',
+        'resend_ssl_approver_email',
+        'create_csr',
+        'decode_csr',
+        'create_ssl_otp_token',
+        'create_ssl_order',
+        'renew_ssl_order',
+        'reissue_ssl_order',
+        'cancel_ssl_order',
       ].sort(),
     );
     for (const t of cat) {
@@ -65,9 +80,9 @@ describe('buildToolCatalog', () => {
     }
   });
 
-  it('returns 50 tools', () => {
+  it('returns 65 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(50);
+    expect(cat).toHaveLength(65);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {

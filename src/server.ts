@@ -71,6 +71,21 @@ import { createGetDomainPriceTool } from './tools/get-domain-price.js';
 import { createListTagsTool } from './tools/list-tags.js';
 import { createCreateTagTool } from './tools/create-tag.js';
 import { createDeleteTagTool } from './tools/delete-tag.js';
+import { createListSslProductsTool } from './tools/list-ssl-products.js';
+import { createGetSslProductTool } from './tools/get-ssl-product.js';
+import { createListSslOrdersTool } from './tools/list-ssl-orders.js';
+import { createGetSslOrderTool } from './tools/get-ssl-order.js';
+import { createGetSslApproverEmailsTool } from './tools/get-ssl-approver-emails.js';
+import { createUpdateSslOrderTool } from './tools/update-ssl-order.js';
+import { createUpdateSslApproverEmailTool } from './tools/update-ssl-approver-email.js';
+import { createResendSslApproverEmailTool } from './tools/resend-ssl-approver-email.js';
+import { createCreateCsrTool } from './tools/create-csr.js';
+import { createDecodeCsrTool } from './tools/decode-csr.js';
+import { createCreateSslOtpTokenTool } from './tools/create-ssl-otp-token.js';
+import { createCreateSslOrderTool } from './tools/create-ssl-order.js';
+import { createRenewSslOrderTool } from './tools/renew-ssl-order.js';
+import { createReissueSslOrderTool } from './tools/reissue-ssl-order.js';
+import { createCancelSslOrderTool } from './tools/cancel-ssl-order.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -388,6 +403,21 @@ async function main(): Promise<void> {
         createListTagsTool({ client: openproviderClient, tokenManager }),
         createCreateTagTool({ client: openproviderClient, tokenManager }),
         createDeleteTagTool({ client: openproviderClient, tokenManager }),
+        createListSslProductsTool({ client: openproviderClient, tokenManager }),
+        createGetSslProductTool({ client: openproviderClient, tokenManager }),
+        createListSslOrdersTool({ client: openproviderClient, tokenManager }),
+        createGetSslOrderTool({ client: openproviderClient, tokenManager }),
+        createGetSslApproverEmailsTool({ client: openproviderClient, tokenManager }),
+        createUpdateSslOrderTool({ client: openproviderClient, tokenManager }),
+        createUpdateSslApproverEmailTool({ client: openproviderClient, tokenManager }),
+        createResendSslApproverEmailTool({ client: openproviderClient, tokenManager }),
+        createCreateCsrTool({ client: openproviderClient, tokenManager }),
+        createDecodeCsrTool({ client: openproviderClient, tokenManager }),
+        createCreateSslOtpTokenTool({ client: openproviderClient, tokenManager }),
+        createCreateSslOrderTool({ client: openproviderClient, tokenManager }),
+        createRenewSslOrderTool({ client: openproviderClient, tokenManager }),
+        createReissueSslOrderTool({ client: openproviderClient, tokenManager }),
+        createCancelSslOrderTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.
