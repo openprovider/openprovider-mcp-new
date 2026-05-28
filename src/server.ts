@@ -65,6 +65,12 @@ import { createDeleteDnsZoneTool } from './tools/delete-dns-zone.js';
 import { createDeleteNameserverTool } from './tools/delete-nameserver.js';
 import { createDeleteNsGroupTool } from './tools/delete-ns-group.js';
 import { createDeleteDnsTemplateTool } from './tools/delete-dns-template.js';
+import { createListTldsTool } from './tools/list-tlds.js';
+import { createGetTldTool } from './tools/get-tld.js';
+import { createGetDomainPriceTool } from './tools/get-domain-price.js';
+import { createListTagsTool } from './tools/list-tags.js';
+import { createCreateTagTool } from './tools/create-tag.js';
+import { createDeleteTagTool } from './tools/delete-tag.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -376,6 +382,12 @@ async function main(): Promise<void> {
         createDeleteNameserverTool({ client: openproviderClient, tokenManager }),
         createDeleteNsGroupTool({ client: openproviderClient, tokenManager }),
         createDeleteDnsTemplateTool({ client: openproviderClient, tokenManager }),
+        createListTldsTool({ client: openproviderClient, tokenManager }),
+        createGetTldTool({ client: openproviderClient, tokenManager }),
+        createGetDomainPriceTool({ client: openproviderClient, tokenManager }),
+        createListTagsTool({ client: openproviderClient, tokenManager }),
+        createCreateTagTool({ client: openproviderClient, tokenManager }),
+        createDeleteTagTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.

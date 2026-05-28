@@ -51,6 +51,12 @@ describe('buildToolCatalog', () => {
         'delete_nameserver',
         'delete_ns_group',
         'delete_dns_template',
+        'list_tlds',
+        'get_tld',
+        'get_domain_price',
+        'list_tags',
+        'create_tag',
+        'delete_tag',
       ].sort(),
     );
     for (const t of cat) {
@@ -59,9 +65,9 @@ describe('buildToolCatalog', () => {
     }
   });
 
-  it('returns 44 tools', () => {
+  it('returns 50 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(44);
+    expect(cat).toHaveLength(50);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {
