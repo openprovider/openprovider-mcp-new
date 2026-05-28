@@ -499,6 +499,215 @@ describe('openprovider client — DNS methods', () => {
   });
 });
 
+describe('openprovider client — SSL methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  // --- reads ---
+
+  it('listSslProducts GETs /ssl/products', async () => {
+    nock(BASE).get(`${PREFIX}/ssl/products`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listSslProducts('tok')).toEqual([]);
+  });
+
+  it('getSslProduct GETs /ssl/products/:id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/products/123`)
+      .reply(200, { data: { id: 123 } });
+    expect(await createOpenproviderClient().getSslProduct('tok', 123)).toEqual({ id: 123 });
+  });
+
+  it('listSslOrders GETs /ssl/orders', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/orders`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listSslOrders('tok')).toEqual({ results: [] });
+  });
+
+  it('getSslOrder GETs /ssl/orders/:id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/orders/42`)
+      .reply(200, { data: { id: 42 } });
+    expect(await createOpenproviderClient().getSslOrder('tok', 42)).toEqual({ id: 42 });
+  });
+
+  it('getSslApproverEmails GETs /ssl/approver-emails with domain query', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/approver-emails`)
+      .query({ domain: 'x.com' })
+      .reply(200, { data: [] });
+    expect(
+      await createOpenproviderClient().getSslApproverEmails('tok', { domain: 'x.com' }),
+    ).toEqual([]);
+  });
+
+  // --- writes ---
+
+  it('createSslOrder POSTs /ssl/orders with the full order body', async () => {
+    const body = {
+      approver_email: 'a@b.c',
+      autorenew: 'on' as const,
+      csr: 'PEM',
+      domain_amount: 1,
+      domain_validation_methods: [{ host_name: 'x.com', method: 'dns' as const }],
+      enable_dns_automation: false,
+      host_names: ['x.com'],
+      organization_handle: 'OH',
+      period: 1,
+      product_id: 1,
+      signature_hash_algorithm: 'sha2',
+      software_id: 'linux',
+      start_provision: true,
+      technical_handle: 'TH',
+      wildcard_domain_amount: 0,
+    };
+    nock(BASE)
+      .post(
+        `${PREFIX}/ssl/orders`,
+        (b: Record<string, unknown>) => b['product_id'] === 1 && Array.isArray(b['host_names']),
+      )
+      .reply(200, { data: { id: 5 } });
+    expect(await createOpenproviderClient().createSslOrder('tok', body)).toEqual({ id: 5 });
+  });
+
+  it('renewSslOrder POSTs /ssl/orders/:id/renew with id derived from args', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/orders/7/renew`, (b: Record<string, unknown>) => b['id'] === 7)
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().renewSslOrder('tok', {
+        id: 7,
+        enable_dns_automation: false,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('cancelSslOrder POSTs /ssl/orders/:id/cancel', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/orders/9/cancel`, (b: Record<string, unknown>) => b['id'] === 9)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().cancelSslOrder('tok', { id: 9 })).toEqual({ ok: true });
+  });
+
+  it('updateSslOrder PUTs /ssl/orders/:id with body', async () => {
+    const body = {
+      id: 3,
+      approver_email: 'a@b.c',
+      autorenew: 'off' as const,
+      csr: 'PEM',
+      domain_amount: 1,
+      domain_validation_methods: [{ host_name: 'x.com', method: 'dns' as const }],
+      enable_dns_automation: false,
+      host_names: ['x.com'],
+      organization_handle: 'OH',
+      period: 1,
+      product_id: 1,
+      signature_hash_algorithm: 'sha2',
+      software_id: 'linux',
+      start_provision: true,
+      technical_handle: 'TH',
+      wildcard_domain_amount: 0,
+    };
+    nock(BASE)
+      .put(`${PREFIX}/ssl/orders/3`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().updateSslOrder('tok', body)).toEqual({ ok: true });
+  });
+
+  it('updateSslApproverEmail PUTs /ssl/orders/:id/approver-email', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/ssl/orders/5/approver-email`,
+        (b: Record<string, unknown>) => b['approver_email'] === 'a@b.c',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateSslApproverEmail('tok', {
+        id: 5,
+        approver_email: 'a@b.c',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('resendSslApproverEmail POSTs /ssl/orders/:id/approver-email/resend', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/ssl/orders/6/approver-email/resend`,
+        (b: Record<string, unknown>) => b['id'] === 6,
+      )
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().resendSslApproverEmail('tok', { id: 6 })).toEqual({
+      ok: true,
+    });
+  });
+
+  it('createCsr POSTs /ssl/csr', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/csr`, (b: Record<string, unknown>) => b['common_name'] === 'x.com')
+      .reply(200, { data: { csr: 'PEM' } });
+    expect(
+      await createOpenproviderClient().createCsr('tok', {
+        bits: 2048,
+        common_name: 'x.com',
+        country: 'NL',
+        email: 'a@b.c',
+        locality: 'Amsterdam',
+        organization: 'X',
+        signature_hash_algorithm: 'sha2',
+        state: 'NH',
+      }),
+    ).toEqual({ csr: 'PEM' });
+  });
+
+  it('decodeCsr POSTs /ssl/csr/decode', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/csr/decode`, (b: Record<string, unknown>) => b['csr'] === 'PEM')
+      .reply(200, { data: { common_name: 'x.com' } });
+    expect(await createOpenproviderClient().decodeCsr('tok', { csr: 'PEM' })).toEqual({
+      common_name: 'x.com',
+    });
+  });
+
+  it('createSslOtpToken POSTs /ssl/orders/:id/otp-tokens', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/orders/4/otp-tokens`, (b: Record<string, unknown>) => b['id'] === 4)
+      .reply(200, { data: { token: 't' } });
+    expect(await createOpenproviderClient().createSslOtpToken('tok', { id: 4 })).toEqual({
+      token: 't',
+    });
+  });
+
+  it('reissueSslOrder POSTs /ssl/orders/:id/reissue with full body', async () => {
+    const body = {
+      id: 8,
+      approver_email: 'a@b.c',
+      autorenew: 'on' as const,
+      csr: 'PEM',
+      domain_amount: 1,
+      domain_validation_methods: [{ host_name: 'x.com', method: 'dns' as const }],
+      enable_dns_automation: false,
+      host_names: ['x.com'],
+      organization_handle: 'OH',
+      period: 1,
+      product_id: 1,
+      signature_hash_algorithm: 'sha2',
+      software_id: 'linux',
+      start_provision: true,
+      technical_handle: 'TH',
+      wildcard_domain_amount: 0,
+    };
+    nock(BASE)
+      .post(
+        `${PREFIX}/ssl/orders/8/reissue`,
+        (b: Record<string, unknown>) => b['id'] === 8 && b['product_id'] === 1,
+      )
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().reissueSslOrder('tok', body)).toEqual({ ok: true });
+  });
+});
+
 describe('openprovider client — catalog + tag methods', () => {
   const BASE = 'https://api.openprovider.eu';
   const PREFIX = '/v1beta';

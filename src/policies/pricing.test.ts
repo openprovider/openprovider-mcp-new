@@ -60,6 +60,21 @@ function clientWith(price: { price: number; currency: string } | undefined, isPr
     listTags: vi.fn(),
     createTag: vi.fn(),
     deleteTag: vi.fn(),
+    listSslProducts: vi.fn(),
+    getSslProduct: vi.fn(),
+    listSslOrders: vi.fn(),
+    getSslOrder: vi.fn(),
+    getSslApproverEmails: vi.fn(),
+    createSslOrder: vi.fn(),
+    renewSslOrder: vi.fn(),
+    reissueSslOrder: vi.fn(),
+    cancelSslOrder: vi.fn(),
+    updateSslOrder: vi.fn(),
+    updateSslApproverEmail: vi.fn(),
+    resendSslApproverEmail: vi.fn(),
+    createCsr: vi.fn(),
+    decodeCsr: vi.fn(),
+    createSslOtpToken: vi.fn(),
   };
 }
 

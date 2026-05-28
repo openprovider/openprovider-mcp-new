@@ -33,6 +33,17 @@ import {
   GetDomainPriceArgs,
   CreateTagArgs,
   DeleteTagArgs,
+  GetSslApproverEmailsArgs,
+  CreateSslOrderArgs,
+  UpdateSslOrderArgs,
+  ReissueSslOrderArgs,
+  RenewSslOrderArgs,
+  CancelSslOrderArgs,
+  UpdateSslApproverEmailArgs,
+  ResendSslApproverEmailArgs,
+  CreateCsrArgs,
+  DecodeCsrArgs,
+  CreateSslOtpTokenArgs,
 } from './types.js';
 
 export interface OpenproviderClientConfig {
@@ -111,6 +122,22 @@ export interface OpenproviderClient {
   listTags(token: string): Promise<unknown>;
   createTag(token: string, args: CreateTagArgs): Promise<unknown>;
   deleteTag(token: string, args: DeleteTagArgs): Promise<unknown>;
+  // SSL methods
+  listSslProducts(token: string): Promise<unknown>;
+  getSslProduct(token: string, id: number): Promise<unknown>;
+  listSslOrders(token: string): Promise<unknown>;
+  getSslOrder(token: string, id: number): Promise<unknown>;
+  getSslApproverEmails(token: string, args: GetSslApproverEmailsArgs): Promise<unknown>;
+  createSslOrder(token: string, args: CreateSslOrderArgs): Promise<unknown>;
+  renewSslOrder(token: string, args: RenewSslOrderArgs): Promise<unknown>;
+  reissueSslOrder(token: string, args: ReissueSslOrderArgs): Promise<unknown>;
+  cancelSslOrder(token: string, args: CancelSslOrderArgs): Promise<unknown>;
+  updateSslOrder(token: string, args: UpdateSslOrderArgs): Promise<unknown>;
+  updateSslApproverEmail(token: string, args: UpdateSslApproverEmailArgs): Promise<unknown>;
+  resendSslApproverEmail(token: string, args: ResendSslApproverEmailArgs): Promise<unknown>;
+  createCsr(token: string, args: CreateCsrArgs): Promise<unknown>;
+  decodeCsr(token: string, args: DecodeCsrArgs): Promise<unknown>;
+  createSslOtpToken(token: string, args: CreateSslOtpTokenArgs): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -451,6 +478,85 @@ export function createOpenproviderClient(
       const parsed = DeleteTagArgs.parse(args);
       const params = new URLSearchParams({ key: parsed.key, value: parsed.value });
       const b = await request('DELETE', `/tags?${params.toString()}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // SSL reads
+    async listSslProducts(token) {
+      const b = await request('GET', '/ssl/products', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getSslProduct(token, id) {
+      const b = await request('GET', `/ssl/products/${id}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listSslOrders(token) {
+      const b = await request('GET', '/ssl/orders', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getSslOrder(token, id) {
+      const b = await request('GET', `/ssl/orders/${id}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getSslApproverEmails(token, args) {
+      const parsed = GetSslApproverEmailsArgs.parse(args);
+      const params = new URLSearchParams({ domain: parsed.domain });
+      const b = await request('GET', `/ssl/approver-emails?${params.toString()}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // SSL writes
+    async createSslOrder(token, args) {
+      const parsed = CreateSslOrderArgs.parse(args);
+      const b = await request('POST', '/ssl/orders', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async renewSslOrder(token, args) {
+      const parsed = RenewSslOrderArgs.parse(args);
+      const b = await request('POST', `/ssl/orders/${parsed.id}/renew`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async reissueSslOrder(token, args) {
+      const parsed = ReissueSslOrderArgs.parse(args);
+      const b = await request('POST', `/ssl/orders/${parsed.id}/reissue`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async cancelSslOrder(token, args) {
+      const parsed = CancelSslOrderArgs.parse(args);
+      const b = await request('POST', `/ssl/orders/${parsed.id}/cancel`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateSslOrder(token, args) {
+      const parsed = UpdateSslOrderArgs.parse(args);
+      const b = await request('PUT', `/ssl/orders/${parsed.id}`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateSslApproverEmail(token, args) {
+      const parsed = UpdateSslApproverEmailArgs.parse(args);
+      const b = await request('PUT', `/ssl/orders/${parsed.id}/approver-email`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async resendSslApproverEmail(token, args) {
+      const parsed = ResendSslApproverEmailArgs.parse(args);
+      const b = await request(
+        'POST',
+        `/ssl/orders/${parsed.id}/approver-email/resend`,
+        token,
+        parsed,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createCsr(token, args) {
+      const parsed = CreateCsrArgs.parse(args);
+      const b = await request('POST', '/ssl/csr', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async decodeCsr(token, args) {
+      const parsed = DecodeCsrArgs.parse(args);
+      const b = await request('POST', '/ssl/csr/decode', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createSslOtpToken(token, args) {
+      const parsed = CreateSslOtpTokenArgs.parse(args);
+      const b = await request('POST', `/ssl/orders/${parsed.id}/otp-tokens`, token, parsed);
       return (b as { data?: unknown }).data ?? b;
     },
     async checkDomain(token, args) {
