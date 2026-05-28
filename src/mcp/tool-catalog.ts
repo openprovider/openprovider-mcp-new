@@ -68,6 +68,11 @@ import { createCreateSslOrderTool } from '../tools/create-ssl-order.js';
 import { createRenewSslOrderTool } from '../tools/renew-ssl-order.js';
 import { createReissueSslOrderTool } from '../tools/reissue-ssl-order.js';
 import { createCancelSslOrderTool } from '../tools/cancel-ssl-order.js';
+import { createListCustomersTool } from '../tools/list-customers.js';
+import { createGetCustomerTool } from '../tools/get-customer.js';
+import { createCreateCustomerTool } from '../tools/create-customer.js';
+import { createUpdateCustomerTool } from '../tools/update-customer.js';
+import { createDeleteCustomerTool } from '../tools/delete-customer.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -155,6 +160,11 @@ export function buildToolCatalog(): ToolEntry[] {
     createRenewSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
     createReissueSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
     createCancelSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListCustomersTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({

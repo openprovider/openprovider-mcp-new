@@ -86,6 +86,11 @@ import { createCreateSslOrderTool } from './tools/create-ssl-order.js';
 import { createRenewSslOrderTool } from './tools/renew-ssl-order.js';
 import { createReissueSslOrderTool } from './tools/reissue-ssl-order.js';
 import { createCancelSslOrderTool } from './tools/cancel-ssl-order.js';
+import { createListCustomersTool } from './tools/list-customers.js';
+import { createGetCustomerTool } from './tools/get-customer.js';
+import { createCreateCustomerTool } from './tools/create-customer.js';
+import { createUpdateCustomerTool } from './tools/update-customer.js';
+import { createDeleteCustomerTool } from './tools/delete-customer.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -418,6 +423,11 @@ async function main(): Promise<void> {
         createRenewSslOrderTool({ client: openproviderClient, tokenManager }),
         createReissueSslOrderTool({ client: openproviderClient, tokenManager }),
         createCancelSslOrderTool({ client: openproviderClient, tokenManager }),
+        createListCustomersTool({ client: openproviderClient, tokenManager }),
+        createGetCustomerTool({ client: openproviderClient, tokenManager }),
+        createCreateCustomerTool({ client: openproviderClient, tokenManager }),
+        createUpdateCustomerTool({ client: openproviderClient, tokenManager }),
+        createDeleteCustomerTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.

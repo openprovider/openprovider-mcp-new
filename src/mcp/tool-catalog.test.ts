@@ -72,6 +72,11 @@ describe('buildToolCatalog', () => {
         'renew_ssl_order',
         'reissue_ssl_order',
         'cancel_ssl_order',
+        'list_customers',
+        'get_customer',
+        'create_customer',
+        'update_customer',
+        'delete_customer',
       ].sort(),
     );
     for (const t of cat) {
@@ -80,9 +85,9 @@ describe('buildToolCatalog', () => {
     }
   });
 
-  it('returns 65 tools', () => {
+  it('returns 70 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(65);
+    expect(cat).toHaveLength(70);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {
