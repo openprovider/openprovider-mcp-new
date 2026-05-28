@@ -642,3 +642,33 @@ export const UpdateSpamExpertsDomainArgs = z.object({
     .optional(),
 });
 export type UpdateSpamExpertsDomainArgs = z.infer<typeof UpdateSpamExpertsDomainArgs>;
+
+// batch7: Plesk license schemas
+
+export const PleskKeyIdArg = z.object({ key_id: z.number().int().positive() });
+export type PleskKeyIdArg = z.infer<typeof PleskKeyIdArg>;
+
+const PleskLicenseBody = z.object({
+  items: z.array(z.string().min(1)).min(1),
+  period: z.number().int().positive(),
+  ip_address_binding: z.string().min(1),
+  title: z.string().min(1),
+  attached_keys: z.array(z.unknown()).optional(),
+  comment: z.string().optional(),
+  parent_key_id: z.number().int().nonnegative().optional(),
+  restrict_ip_binding: z.boolean().optional(),
+});
+
+export const CreatePleskLicenseArgs = PleskLicenseBody;
+export type CreatePleskLicenseArgs = z.infer<typeof CreatePleskLicenseArgs>;
+
+export const UpdatePleskLicenseArgs = PleskLicenseBody.extend({
+  key_id: z.number().int().positive(),
+});
+export type UpdatePleskLicenseArgs = z.infer<typeof UpdatePleskLicenseArgs>;
+
+export const ResetPleskHwidArgs = z.object({
+  key_id: z.number().int().positive(),
+  product: z.string().min(1),
+});
+export type ResetPleskHwidArgs = z.infer<typeof ResetPleskHwidArgs>;

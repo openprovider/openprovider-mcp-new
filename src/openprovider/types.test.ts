@@ -552,3 +552,49 @@ describe('batch6 email schemas', () => {
     );
   });
 });
+
+import {
+  PleskKeyIdArg,
+  CreatePleskLicenseArgs,
+  UpdatePleskLicenseArgs,
+  ResetPleskHwidArgs,
+} from './types.js';
+
+describe('batch7 license schemas', () => {
+  it('PleskKeyIdArg requires positive int key_id', () => {
+    expect(PleskKeyIdArg.safeParse({ key_id: 1 }).success).toBe(true);
+    expect(PleskKeyIdArg.safeParse({ key_id: -1 }).success).toBe(false);
+    expect(PleskKeyIdArg.safeParse({}).success).toBe(false);
+  });
+  it('CreatePleskLicenseArgs requires items/period/ip_address_binding/title', () => {
+    const valid = { items: ['SKU'], period: 1, ip_address_binding: '127.0.0.1', title: 'T' };
+    expect(CreatePleskLicenseArgs.safeParse(valid).success).toBe(true);
+    expect(CreatePleskLicenseArgs.safeParse({ ...valid, items: [] }).success).toBe(false); // min(1)
+    expect(CreatePleskLicenseArgs.safeParse({ ...valid, period: -1 }).success).toBe(false);
+    expect(CreatePleskLicenseArgs.safeParse({ items: ['SKU'], period: 1 }).success).toBe(false); // missing ip+title
+  });
+  it('CreatePleskLicenseArgs accepts optional fields', () => {
+    expect(
+      CreatePleskLicenseArgs.safeParse({
+        items: ['SKU'],
+        period: 1,
+        ip_address_binding: '127.0.0.1',
+        title: 'T',
+        comment: 'c',
+        parent_key_id: 0,
+        restrict_ip_binding: false,
+        attached_keys: [],
+      }).success,
+    ).toBe(true);
+  });
+  it('UpdatePleskLicenseArgs requires key_id + body', () => {
+    const body = { items: ['SKU'], period: 1, ip_address_binding: '127.0.0.1', title: 'T' };
+    expect(UpdatePleskLicenseArgs.safeParse({ key_id: 1, ...body }).success).toBe(true);
+    expect(UpdatePleskLicenseArgs.safeParse(body).success).toBe(false); // missing key_id
+  });
+  it('ResetPleskHwidArgs requires key_id + product', () => {
+    expect(ResetPleskHwidArgs.safeParse({ key_id: 1, product: 'plesk' }).success).toBe(true);
+    expect(ResetPleskHwidArgs.safeParse({ key_id: 1 }).success).toBe(false);
+    expect(ResetPleskHwidArgs.safeParse({ product: 'plesk' }).success).toBe(false);
+  });
+});
