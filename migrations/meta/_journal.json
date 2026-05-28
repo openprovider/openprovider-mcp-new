@@ -20,6 +20,7 @@
     { "idx": 15, "version": "5", "when": 1749100000000, "tag": "0016_tags_policy", "breakpoints": true },
     { "idx": 16, "version": "5", "when": 1749200000000, "tag": "0017_ssl_policy", "breakpoints": true },
     { "idx": 17, "version": "5", "when": 1749300000000, "tag": "0018_customers_policy", "breakpoints": true },
-    { "idx": 18, "version": "5", "when": 1749400000000, "tag": "0019_email_policy", "breakpoints": true }
+    { "idx": 18, "version": "5", "when": 1749400000000, "tag": "0019_email_policy", "breakpoints": true },
+    { "idx": 19, "version": "5", "when": 1749500000000, "tag": "0020_license_policy", "breakpoints": true }
   ]
 }

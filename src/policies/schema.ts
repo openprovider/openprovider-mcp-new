@@ -89,6 +89,10 @@ export const DEFAULT_POLICY: PolicyDoc = {
     create_spam_experts_domain: 'allow',
     update_spam_experts_domain: 'allow',
     delete_spam_experts_domain: 'confirm',
+    create_plesk_license: 'confirm',
+    update_plesk_license: 'allow',
+    reset_plesk_hwid: 'allow',
+    delete_plesk_license: 'confirm',
   },
   ip_allowlist: [],
 };
