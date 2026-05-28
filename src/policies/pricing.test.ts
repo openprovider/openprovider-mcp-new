@@ -75,6 +75,11 @@ function clientWith(price: { price: number; currency: string } | undefined, isPr
     createCsr: vi.fn(),
     decodeCsr: vi.fn(),
     createSslOtpToken: vi.fn(),
+    listCustomers: vi.fn(),
+    getCustomer: vi.fn(),
+    createCustomer: vi.fn(),
+    updateCustomer: vi.fn(),
+    deleteCustomer: vi.fn(),
   };
 }
 

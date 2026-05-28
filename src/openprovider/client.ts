@@ -44,6 +44,8 @@ import {
   CreateCsrArgs,
   DecodeCsrArgs,
   CreateSslOtpTokenArgs,
+  CreateCustomerArgs,
+  UpdateCustomerArgs,
 } from './types.js';
 
 export interface OpenproviderClientConfig {
@@ -138,6 +140,12 @@ export interface OpenproviderClient {
   createCsr(token: string, args: CreateCsrArgs): Promise<unknown>;
   decodeCsr(token: string, args: DecodeCsrArgs): Promise<unknown>;
   createSslOtpToken(token: string, args: CreateSslOtpTokenArgs): Promise<unknown>;
+  // Customer methods
+  listCustomers(token: string): Promise<unknown>;
+  getCustomer(token: string, handle: string): Promise<unknown>;
+  createCustomer(token: string, args: CreateCustomerArgs): Promise<unknown>;
+  updateCustomer(token: string, args: UpdateCustomerArgs): Promise<unknown>;
+  deleteCustomer(token: string, handle: string): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -557,6 +565,34 @@ export function createOpenproviderClient(
     async createSslOtpToken(token, args) {
       const parsed = CreateSslOtpTokenArgs.parse(args);
       const b = await request('POST', `/ssl/orders/${parsed.id}/otp-tokens`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // Customer methods
+    async listCustomers(token) {
+      const b = await request('GET', '/customers', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getCustomer(token, handle) {
+      const b = await request('GET', `/customers/${encodeURIComponent(handle)}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createCustomer(token, args) {
+      const parsed = CreateCustomerArgs.parse(args);
+      const b = await request('POST', '/customers', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateCustomer(token, args) {
+      const parsed = UpdateCustomerArgs.parse(args);
+      const b = await request(
+        'PUT',
+        `/customers/${encodeURIComponent(parsed.handle)}`,
+        token,
+        parsed,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteCustomer(token, handle) {
+      const b = await request('DELETE', `/customers/${encodeURIComponent(handle)}`, token);
       return (b as { data?: unknown }).data ?? b;
     },
     async checkDomain(token, args) {

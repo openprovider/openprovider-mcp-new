@@ -785,3 +785,69 @@ describe('openprovider client — catalog + tag methods', () => {
     ).toEqual({ ok: true });
   });
 });
+
+describe('openprovider client — customer methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listCustomers GETs /customers', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/customers`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listCustomers('tok')).toEqual({ results: [] });
+  });
+
+  it('getCustomer GETs /customers/:handle (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/customers/JD123-NL`)
+      .reply(200, { data: { handle: 'JD123-NL' } });
+    expect(await createOpenproviderClient().getCustomer('tok', 'JD123-NL')).toEqual({
+      handle: 'JD123-NL',
+    });
+  });
+
+  it('createCustomer POSTs /customers with required body', async () => {
+    const valid = {
+      email: 'a@b.c',
+      username: 'usr',
+      name: { first_name: 'F', last_name: 'L' },
+      address: { street: 'St', number: '1', city: 'C', zipcode: 'Z', country: 'NL' },
+      phone: { country_code: '+1', area_code: '555', subscriber_number: '1234567' },
+    };
+    nock(BASE)
+      .post(
+        `${PREFIX}/customers`,
+        (b: Record<string, unknown>) => b['email'] === 'a@b.c' && b['username'] === 'usr',
+      )
+      .reply(200, { data: { handle: 'JD123-NL' } });
+    expect(await createOpenproviderClient().createCustomer('tok', valid)).toEqual({
+      handle: 'JD123-NL',
+    });
+  });
+
+  it('updateCustomer PUTs /customers/:handle derived from args', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/customers/JD123-NL`,
+        (b: Record<string, unknown>) => b['handle'] === 'JD123-NL',
+      )
+      .reply(200, { data: { handle: 'JD123-NL' } });
+    expect(
+      await createOpenproviderClient().updateCustomer('tok', {
+        handle: 'JD123-NL',
+        email: 'new@b.c',
+      }),
+    ).toEqual({ handle: 'JD123-NL' });
+  });
+
+  it('deleteCustomer DELETEs /customers/:handle', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/customers/JD123-NL`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteCustomer('tok', 'JD123-NL')).toEqual({
+      ok: true,
+    });
+  });
+});

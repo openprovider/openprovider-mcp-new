@@ -80,6 +80,11 @@ function deps() {
       createCsr: vi.fn(),
       decodeCsr: vi.fn(),
       createSslOtpToken: vi.fn(),
+      listCustomers: vi.fn(),
+      getCustomer: vi.fn(),
+      createCustomer: vi.fn(),
+      updateCustomer: vi.fn(),
+      deleteCustomer: vi.fn(),
     },
     tokenManager: { getToken: vi.fn().mockResolvedValue('jwt'), invalidate: vi.fn() },
   };
