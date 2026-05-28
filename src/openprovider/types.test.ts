@@ -26,6 +26,21 @@ import {
   NoArgs,
 } from './types.js';
 import { TldNameArg, GetDomainPriceArgs, CreateTagArgs, DeleteTagArgs } from './types.js';
+import {
+  SslOrderIdArg,
+  SslProductIdArg,
+  GetSslApproverEmailsArgs,
+  CreateSslOrderArgs,
+  UpdateSslOrderArgs,
+  ReissueSslOrderArgs,
+  RenewSslOrderArgs,
+  CancelSslOrderArgs,
+  UpdateSslApproverEmailArgs,
+  ResendSslApproverEmailArgs,
+  CreateCsrArgs,
+  DecodeCsrArgs,
+  CreateSslOtpTokenArgs,
+} from './types.js';
 
 describe('batch1 domain-lifecycle schemas', () => {
   it('DomainIdArg requires positive int id', () => {
@@ -207,5 +222,150 @@ describe('batch3 catalog+tags schemas', () => {
   it('DeleteTagArgs requires key+value', () => {
     expect(DeleteTagArgs.safeParse({ key: 'customer', value: 'Tech' }).success).toBe(true);
     expect(DeleteTagArgs.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('batch4 SSL schemas', () => {
+  const validOrderBody = {
+    approver_email: 'a@b.c',
+    autorenew: 'on' as const,
+    csr: 'PEM',
+    domain_amount: 1,
+    domain_validation_methods: [{ host_name: 'x.com', method: 'dns' as const }],
+    enable_dns_automation: false,
+    host_names: ['x.com'],
+    organization_handle: 'OH',
+    period: 1,
+    product_id: 1,
+    signature_hash_algorithm: 'sha2',
+    software_id: 'linux',
+    start_provision: true,
+    technical_handle: 'TH',
+    wildcard_domain_amount: 0,
+  };
+
+  it('SslOrderIdArg requires positive int id', () => {
+    expect(SslOrderIdArg.safeParse({ id: 1 }).success).toBe(true);
+    expect(SslOrderIdArg.safeParse({ id: 0 }).success).toBe(false);
+    expect(SslOrderIdArg.safeParse({}).success).toBe(false);
+  });
+
+  it('SslProductIdArg requires positive int id', () => {
+    expect(SslProductIdArg.safeParse({ id: 42 }).success).toBe(true);
+    expect(SslProductIdArg.safeParse({ id: -1 }).success).toBe(false);
+    expect(SslProductIdArg.safeParse({}).success).toBe(false);
+  });
+
+  it('GetSslApproverEmailsArgs requires domain string', () => {
+    expect(GetSslApproverEmailsArgs.safeParse({ domain: 'x.com' }).success).toBe(true);
+    expect(GetSslApproverEmailsArgs.safeParse({ domain: '' }).success).toBe(false);
+    expect(GetSslApproverEmailsArgs.safeParse({}).success).toBe(false);
+  });
+
+  it('CreateSslOrderArgs requires the full order body', () => {
+    expect(CreateSslOrderArgs.safeParse(validOrderBody).success).toBe(true);
+    expect(
+      CreateSslOrderArgs.safeParse({ ...validOrderBody, approver_email: undefined }).success,
+    ).toBe(false);
+    expect(CreateSslOrderArgs.safeParse({ ...validOrderBody, autorenew: 'maybe' }).success).toBe(
+      false,
+    );
+  });
+
+  it('CreateSslOrderArgs rejects empty domain_validation_methods', () => {
+    expect(
+      CreateSslOrderArgs.safeParse({ ...validOrderBody, domain_validation_methods: [] }).success,
+    ).toBe(false);
+  });
+
+  it('CreateSslOrderArgs rejects invalid method in domain_validation_methods', () => {
+    expect(
+      CreateSslOrderArgs.safeParse({
+        ...validOrderBody,
+        domain_validation_methods: [{ host_name: 'x.com', method: 'ftp' }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('UpdateSslOrderArgs requires id + full body', () => {
+    expect(UpdateSslOrderArgs.safeParse({ ...validOrderBody, id: 99 }).success).toBe(true);
+    expect(UpdateSslOrderArgs.safeParse(validOrderBody).success).toBe(false); // missing id
+    expect(UpdateSslOrderArgs.safeParse({ id: 99 }).success).toBe(false); // missing body fields
+  });
+
+  it('ReissueSslOrderArgs requires id + full body', () => {
+    expect(ReissueSslOrderArgs.safeParse({ ...validOrderBody, id: 7 }).success).toBe(true);
+    expect(ReissueSslOrderArgs.safeParse(validOrderBody).success).toBe(false);
+  });
+
+  it('RenewSslOrderArgs requires id + enable_dns_automation', () => {
+    expect(RenewSslOrderArgs.safeParse({ id: 1, enable_dns_automation: false }).success).toBe(true);
+    expect(RenewSslOrderArgs.safeParse({ id: 1 }).success).toBe(false);
+    expect(RenewSslOrderArgs.safeParse({ enable_dns_automation: true }).success).toBe(false);
+  });
+
+  it('CancelSslOrderArgs requires id', () => {
+    expect(CancelSslOrderArgs.safeParse({ id: 5 }).success).toBe(true);
+    expect(CancelSslOrderArgs.safeParse({}).success).toBe(false);
+    expect(CancelSslOrderArgs.safeParse({ id: 0 }).success).toBe(false);
+  });
+
+  it('UpdateSslApproverEmailArgs requires id + approver_email', () => {
+    expect(UpdateSslApproverEmailArgs.safeParse({ id: 1, approver_email: 'a@b.c' }).success).toBe(
+      true,
+    );
+    expect(UpdateSslApproverEmailArgs.safeParse({ id: 1 }).success).toBe(false);
+    expect(UpdateSslApproverEmailArgs.safeParse({ approver_email: 'a@b.c' }).success).toBe(false);
+  });
+
+  it('ResendSslApproverEmailArgs requires id', () => {
+    expect(ResendSslApproverEmailArgs.safeParse({ id: 3 }).success).toBe(true);
+    expect(ResendSslApproverEmailArgs.safeParse({}).success).toBe(false);
+  });
+
+  it('CreateCsrArgs requires bits/CN/country/email/locality/organization/sig_algo/state', () => {
+    const valid = {
+      bits: 2048,
+      common_name: 'x.com',
+      country: 'NL',
+      email: 'a@b.c',
+      locality: 'Amsterdam',
+      organization: 'X',
+      signature_hash_algorithm: 'sha2',
+      state: 'NH',
+    };
+    expect(CreateCsrArgs.safeParse(valid).success).toBe(true);
+    expect(CreateCsrArgs.safeParse({ ...valid, country: 'NLD' }).success).toBe(false); // >2 chars
+    expect(CreateCsrArgs.safeParse({ ...valid, bits: undefined }).success).toBe(false);
+    expect(CreateCsrArgs.safeParse({ ...valid, common_name: '' }).success).toBe(false);
+  });
+
+  it('CreateCsrArgs accepts optional fields', () => {
+    const valid = {
+      bits: 4096,
+      common_name: 'y.com',
+      country: 'DE',
+      email: 'x@y.z',
+      locality: 'Berlin',
+      organization: 'Y',
+      signature_hash_algorithm: 'sha256',
+      state: 'BE',
+      subject_alternative_name: ['san.y.com'],
+      unit: 'IT',
+      with_config: true,
+    };
+    expect(CreateCsrArgs.safeParse(valid).success).toBe(true);
+  });
+
+  it('DecodeCsrArgs requires csr', () => {
+    expect(DecodeCsrArgs.safeParse({ csr: 'PEM' }).success).toBe(true);
+    expect(DecodeCsrArgs.safeParse({ csr: '' }).success).toBe(false);
+    expect(DecodeCsrArgs.safeParse({}).success).toBe(false);
+  });
+
+  it('CreateSslOtpTokenArgs requires id', () => {
+    expect(CreateSslOtpTokenArgs.safeParse({ id: 10 }).success).toBe(true);
+    expect(CreateSslOtpTokenArgs.safeParse({ id: 0 }).success).toBe(false);
+    expect(CreateSslOtpTokenArgs.safeParse({}).success).toBe(false);
   });
 });

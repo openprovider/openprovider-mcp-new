@@ -370,3 +370,94 @@ export const DeleteTagArgs = z.object({
   value: z.string().min(1),
 });
 export type DeleteTagArgs = z.infer<typeof DeleteTagArgs>;
+
+// ---------------------------------------------------------------------------
+// SSL schemas — batch 4 (Phase enterprise)
+// ---------------------------------------------------------------------------
+
+// Path-id args
+export const SslOrderIdArg = z.object({ id: z.number().int().positive() });
+export type SslOrderIdArg = z.infer<typeof SslOrderIdArg>;
+
+export const SslProductIdArg = z.object({ id: z.number().int().positive() });
+export type SslProductIdArg = z.infer<typeof SslProductIdArg>;
+
+// Query-arg
+export const GetSslApproverEmailsArgs = z.object({ domain: z.string().min(1) });
+export type GetSslApproverEmailsArgs = z.infer<typeof GetSslApproverEmailsArgs>;
+
+// Shared SSL order body helpers (non-exported)
+const DomainValidationMethod = z.object({
+  host_name: z.string().min(1),
+  method: z.enum(['dns', 'email', 'http']),
+});
+
+const SslOrderBody = z.object({
+  approver_email: z.string().min(1),
+  autorenew: z.enum(['on', 'off']),
+  csr: z.string().min(1),
+  domain_amount: z.number().int().nonnegative(),
+  domain_validation_methods: z.array(DomainValidationMethod).min(1),
+  enable_dns_automation: z.boolean(),
+  host_names: z.array(z.string().min(1)).min(1),
+  organization_handle: z.string().min(1),
+  period: z.number().int().positive(),
+  product_id: z.number().int().positive(),
+  signature_hash_algorithm: z.string().min(1),
+  software_id: z.string().min(1),
+  start_provision: z.boolean(),
+  technical_handle: z.string().min(1),
+  wildcard_domain_amount: z.number().int().nonnegative(),
+});
+
+export const CreateSslOrderArgs = SslOrderBody;
+export type CreateSslOrderArgs = z.infer<typeof CreateSslOrderArgs>;
+
+export const UpdateSslOrderArgs = SslOrderBody.extend({ id: z.number().int().positive() });
+export type UpdateSslOrderArgs = z.infer<typeof UpdateSslOrderArgs>;
+
+export const ReissueSslOrderArgs = SslOrderBody.extend({ id: z.number().int().positive() });
+export type ReissueSslOrderArgs = z.infer<typeof ReissueSslOrderArgs>;
+
+// Renew / Cancel
+export const RenewSslOrderArgs = z.object({
+  id: z.number().int().positive(),
+  enable_dns_automation: z.boolean(),
+});
+export type RenewSslOrderArgs = z.infer<typeof RenewSslOrderArgs>;
+
+export const CancelSslOrderArgs = z.object({ id: z.number().int().positive() });
+export type CancelSslOrderArgs = z.infer<typeof CancelSslOrderArgs>;
+
+// Approver-email actions
+export const UpdateSslApproverEmailArgs = z.object({
+  id: z.number().int().positive(),
+  approver_email: z.string().min(1),
+});
+export type UpdateSslApproverEmailArgs = z.infer<typeof UpdateSslApproverEmailArgs>;
+
+export const ResendSslApproverEmailArgs = z.object({ id: z.number().int().positive() });
+export type ResendSslApproverEmailArgs = z.infer<typeof ResendSslApproverEmailArgs>;
+
+// CSR
+export const CreateCsrArgs = z.object({
+  bits: z.number().int().positive(),
+  common_name: z.string().min(1),
+  country: z.string().min(2).max(2),
+  email: z.string().min(1),
+  locality: z.string().min(1),
+  organization: z.string().min(1),
+  signature_hash_algorithm: z.string().min(1),
+  state: z.string().min(1),
+  subject_alternative_name: z.array(z.string()).optional(),
+  unit: z.string().optional(),
+  with_config: z.boolean().optional(),
+});
+export type CreateCsrArgs = z.infer<typeof CreateCsrArgs>;
+
+export const DecodeCsrArgs = z.object({ csr: z.string().min(1) });
+export type DecodeCsrArgs = z.infer<typeof DecodeCsrArgs>;
+
+// OTP token
+export const CreateSslOtpTokenArgs = z.object({ id: z.number().int().positive() });
+export type CreateSslOtpTokenArgs = z.infer<typeof CreateSslOtpTokenArgs>;
