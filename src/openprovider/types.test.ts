@@ -42,6 +42,22 @@ import {
   CreateSslOtpTokenArgs,
 } from './types.js';
 import { CustomerHandleArg, CreateCustomerArgs, UpdateCustomerArgs } from './types.js';
+import {
+  EmailTemplateIdArg,
+  EasyDmarcIdArg,
+  SpamExpertsDomainArg,
+  GetDmarcArgs,
+  CreateEmailTemplateArgs,
+  UpdateEmailTemplateArgs,
+  StartEmailVerificationArgs,
+  RestartEmailVerificationArgs,
+  CreateDmarcArgs,
+  RetryDmarcArgs,
+  DmarcSsoLoginArgs,
+  SpamExpertsLoginUrlArgs,
+  CreateSpamExpertsDomainArgs,
+  UpdateSpamExpertsDomainArgs,
+} from './types.js';
 
 describe('batch1 domain-lifecycle schemas', () => {
   it('DomainIdArg requires positive int id', () => {
@@ -421,5 +437,118 @@ describe('batch5 customer schemas', () => {
     expect(
       UpdateCustomerArgs.safeParse({ handle: 'JD123-NL', name: { first_name: 'X' } }).success,
     ).toBe(true);
+  });
+});
+
+describe('batch6 email schemas', () => {
+  it('EmailTemplateIdArg requires positive int id', () => {
+    expect(EmailTemplateIdArg.safeParse({ id: 1 }).success).toBe(true);
+    expect(EmailTemplateIdArg.safeParse({ id: 0 }).success).toBe(false);
+    expect(EmailTemplateIdArg.safeParse({}).success).toBe(false);
+  });
+
+  it('EasyDmarcIdArg requires positive int id', () => {
+    expect(EasyDmarcIdArg.safeParse({ id: 1 }).success).toBe(true);
+    expect(EasyDmarcIdArg.safeParse({ id: -1 }).success).toBe(false);
+    expect(EasyDmarcIdArg.safeParse({}).success).toBe(false);
+  });
+
+  it('SpamExpertsDomainArg requires domain_name', () => {
+    expect(SpamExpertsDomainArg.safeParse({ domain_name: 'x.com' }).success).toBe(true);
+    expect(SpamExpertsDomainArg.safeParse({}).success).toBe(false);
+  });
+
+  it('GetDmarcArgs requires domain.name + domain.extension', () => {
+    expect(GetDmarcArgs.safeParse({ domain: { name: 'x', extension: 'com' } }).success).toBe(true);
+    expect(GetDmarcArgs.safeParse({}).success).toBe(false);
+  });
+
+  it('CreateEmailTemplateArgs requires group+name', () => {
+    expect(CreateEmailTemplateArgs.safeParse({ group: 'ive', name: 'tpl' }).success).toBe(true);
+    expect(CreateEmailTemplateArgs.safeParse({ group: 'ive' }).success).toBe(false);
+  });
+
+  it('UpdateEmailTemplateArgs requires id+group+name', () => {
+    expect(UpdateEmailTemplateArgs.safeParse({ id: 1, group: 'ive', name: 'tpl' }).success).toBe(
+      true,
+    );
+    expect(UpdateEmailTemplateArgs.safeParse({ group: 'ive', name: 'tpl' }).success).toBe(false);
+  });
+
+  it('StartEmailVerificationArgs requires email + handle', () => {
+    expect(StartEmailVerificationArgs.safeParse({ email: 'a@b.c', handle: 'JD-NL' }).success).toBe(
+      true,
+    );
+    expect(StartEmailVerificationArgs.safeParse({ email: 'a@b.c' }).success).toBe(false);
+  });
+
+  it('RestartEmailVerificationArgs same as start', () => {
+    expect(
+      RestartEmailVerificationArgs.safeParse({ email: 'a@b.c', handle: 'JD-NL' }).success,
+    ).toBe(true);
+    expect(RestartEmailVerificationArgs.safeParse({ handle: 'JD-NL' }).success).toBe(false);
+  });
+
+  it('CreateDmarcArgs requires domain + owner_handle', () => {
+    expect(
+      CreateDmarcArgs.safeParse({ domain: { name: 'x', extension: 'com' }, owner_handle: 'OH' })
+        .success,
+    ).toBe(true);
+    expect(CreateDmarcArgs.safeParse({ domain: { name: 'x', extension: 'com' } }).success).toBe(
+      false,
+    );
+  });
+
+  it('RetryDmarcArgs / DmarcSsoLoginArgs / EmailTemplateIdArg / EasyDmarcIdArg require positive int id', () => {
+    expect(RetryDmarcArgs.safeParse({ id: 1 }).success).toBe(true);
+    expect(RetryDmarcArgs.safeParse({}).success).toBe(false);
+    expect(DmarcSsoLoginArgs.safeParse({ id: 1 }).success).toBe(true);
+    expect(EmailTemplateIdArg.safeParse({ id: 1 }).success).toBe(true);
+    expect(EasyDmarcIdArg.safeParse({ id: 1 }).success).toBe(true);
+  });
+
+  it('DmarcSsoLoginArgs requires positive int id', () => {
+    expect(DmarcSsoLoginArgs.safeParse({ id: 5 }).success).toBe(true);
+    expect(DmarcSsoLoginArgs.safeParse({ id: 0 }).success).toBe(false);
+    expect(DmarcSsoLoginArgs.safeParse({}).success).toBe(false);
+  });
+
+  it('SpamExpertsLoginUrlArgs requires bundle + domain_or_email', () => {
+    expect(
+      SpamExpertsLoginUrlArgs.safeParse({ bundle: false, domain_or_email: 'a@b.c' }).success,
+    ).toBe(true);
+    expect(SpamExpertsLoginUrlArgs.safeParse({ bundle: false }).success).toBe(false);
+  });
+
+  it('CreateSpamExpertsDomainArgs.aliases is a flat string array', () => {
+    const valid = {
+      bundle: true,
+      destinations: [{ hostname: 'h', port: 25 }],
+      domain_name: 'x.com',
+      products: { archiving: false, incoming: true, outgoing: false },
+    };
+    expect(
+      CreateSpamExpertsDomainArgs.safeParse({ ...valid, aliases: ['a.com', 'b.com'] }).success,
+    ).toBe(true);
+    // object form invalid on create
+    expect(
+      CreateSpamExpertsDomainArgs.safeParse({ ...valid, aliases: { add: ['a.com'] } }).success,
+    ).toBe(false);
+  });
+
+  it('UpdateSpamExpertsDomainArgs.aliases is an {add,remove} object', () => {
+    const valid = {
+      bundle: true,
+      destinations: [{ hostname: 'h', port: 25 }],
+      domain_name: 'x.com',
+      products: { archiving: false, incoming: true, outgoing: false },
+    };
+    expect(
+      UpdateSpamExpertsDomainArgs.safeParse({ ...valid, aliases: { add: ['a.com'] } }).success,
+    ).toBe(true);
+    // array form invalid on update
+    expect(UpdateSpamExpertsDomainArgs.safeParse({ ...valid, aliases: ['a.com'] }).success).toBe(
+      false,
+    );
   });
 });

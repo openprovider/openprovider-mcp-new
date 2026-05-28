@@ -535,3 +535,110 @@ export const UpdateCustomerArgs = z.object({
   extension_additional_data: z.array(ExtensionAdditionalData).optional(),
 });
 export type UpdateCustomerArgs = z.infer<typeof UpdateCustomerArgs>;
+
+// ---------------------------------------------------------------------------
+// Email, DMARC, and SpamExperts schemas — batch 6 (Phase enterprise)
+// ---------------------------------------------------------------------------
+
+// path-arg schemas
+export const EmailTemplateIdArg = z.object({ id: z.number().int().positive() });
+export type EmailTemplateIdArg = z.infer<typeof EmailTemplateIdArg>;
+
+export const EasyDmarcIdArg = z.object({ id: z.number().int().positive() });
+export type EasyDmarcIdArg = z.infer<typeof EasyDmarcIdArg>;
+
+export const SpamExpertsDomainArg = z.object({ domain_name: z.string().min(1) });
+export type SpamExpertsDomainArg = z.infer<typeof SpamExpertsDomainArg>;
+
+// dmarc query-arg
+export const GetDmarcArgs = z.object({ domain: DomainRef });
+export type GetDmarcArgs = z.infer<typeof GetDmarcArgs>;
+
+// email templates (file-private helpers)
+const EmailTemplateField = z.object({ name: z.string(), value: z.string() });
+const EmailTemplateTag = z.object({ key: z.string(), value: z.string() });
+const EmailTemplateBody = z.object({
+  group: z.string().min(1),
+  name: z.string().min(1),
+  id: z.number().int().nonnegative().optional(),
+  fields: z.array(EmailTemplateField).optional(),
+  locale: z.array(z.string()).optional(),
+  tags: z.array(EmailTemplateTag).optional(),
+  is_active: z.boolean().optional(),
+  is_default: z.boolean().optional(),
+});
+
+export const CreateEmailTemplateArgs = EmailTemplateBody;
+export type CreateEmailTemplateArgs = z.infer<typeof CreateEmailTemplateArgs>;
+
+export const UpdateEmailTemplateArgs = EmailTemplateBody.extend({
+  id: z.number().int().positive(),
+});
+export type UpdateEmailTemplateArgs = z.infer<typeof UpdateEmailTemplateArgs>;
+
+// email verification (file-private helper)
+const EmailVerificationBody = z.object({
+  email: z.string().min(1),
+  handle: z.string().min(1),
+  language: z.string().optional(),
+  tag: z.string().optional(),
+});
+
+export const StartEmailVerificationArgs = EmailVerificationBody;
+export type StartEmailVerificationArgs = z.infer<typeof StartEmailVerificationArgs>;
+
+export const RestartEmailVerificationArgs = EmailVerificationBody;
+export type RestartEmailVerificationArgs = z.infer<typeof RestartEmailVerificationArgs>;
+
+// dmarc
+export const CreateDmarcArgs = z.object({
+  domain: DomainRef,
+  owner_handle: z.string().min(1),
+});
+export type CreateDmarcArgs = z.infer<typeof CreateDmarcArgs>;
+
+export const RetryDmarcArgs = z.object({ id: z.number().int().positive() });
+export type RetryDmarcArgs = z.infer<typeof RetryDmarcArgs>;
+
+export const DmarcSsoLoginArgs = z.object({ id: z.number().int().positive() });
+export type DmarcSsoLoginArgs = z.infer<typeof DmarcSsoLoginArgs>;
+
+// spam experts (file-private helpers)
+const SpamExpertsDestination = z.object({
+  hostname: z.string().min(1),
+  port: z.number().int().positive(),
+});
+const SpamExpertsProducts = z.object({
+  archiving: z.boolean(),
+  incoming: z.boolean(),
+  outgoing: z.boolean(),
+});
+
+export const SpamExpertsLoginUrlArgs = z.object({
+  bundle: z.boolean(),
+  domain_or_email: z.string().min(1),
+});
+export type SpamExpertsLoginUrlArgs = z.infer<typeof SpamExpertsLoginUrlArgs>;
+
+export const CreateSpamExpertsDomainArgs = z.object({
+  aliases: z.array(z.string()).optional(),
+  bundle: z.boolean(),
+  destinations: z.array(SpamExpertsDestination).min(1),
+  domain_name: z.string().min(1),
+  products: SpamExpertsProducts,
+});
+export type CreateSpamExpertsDomainArgs = z.infer<typeof CreateSpamExpertsDomainArgs>;
+
+export const UpdateSpamExpertsDomainArgs = z.object({
+  domain_name: z.string().min(1),
+  bundle: z.boolean(),
+  destinations: z.array(SpamExpertsDestination).min(1),
+  products: SpamExpertsProducts,
+  aliases: z
+    .object({
+      add: z.array(z.string()).optional(),
+      remove: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
+export type UpdateSpamExpertsDomainArgs = z.infer<typeof UpdateSpamExpertsDomainArgs>;
