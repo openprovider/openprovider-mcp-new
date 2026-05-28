@@ -26,6 +26,15 @@ import { createRenewDomainTool } from '../tools/renew-domain.js';
 import { createTransferDomainTool } from '../tools/transfer-domain.js';
 import { createTradeDomainTool } from '../tools/trade-domain.js';
 import { createRestoreDomainTool } from '../tools/restore-domain.js';
+import { createListDnsZonesTool } from '../tools/list-dns-zones.js';
+import { createGetDnsZoneTool } from '../tools/get-dns-zone.js';
+import { createListDnsZoneRecordsTool } from '../tools/list-dns-zone-records.js';
+import { createListNameserversTool } from '../tools/list-nameservers.js';
+import { createGetNameserverTool } from '../tools/get-nameserver.js';
+import { createListNsGroupsTool } from '../tools/list-ns-groups.js';
+import { createGetNsGroupTool } from '../tools/get-ns-group.js';
+import { createListDnsTemplatesTool } from '../tools/list-dns-templates.js';
+import { createGetDnsTemplateTool } from '../tools/get-dns-template.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -71,6 +80,15 @@ export function buildToolCatalog(): ToolEntry[] {
     createTransferDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
     createTradeDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
     createRestoreDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDnsZonesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDnsZoneRecordsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListNameserversTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListNsGroupsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDnsTemplatesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({

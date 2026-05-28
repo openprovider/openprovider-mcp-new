@@ -44,6 +44,15 @@ import { createRenewDomainTool } from './tools/renew-domain.js';
 import { createTransferDomainTool } from './tools/transfer-domain.js';
 import { createTradeDomainTool } from './tools/trade-domain.js';
 import { createRestoreDomainTool } from './tools/restore-domain.js';
+import { createListDnsZonesTool } from './tools/list-dns-zones.js';
+import { createGetDnsZoneTool } from './tools/get-dns-zone.js';
+import { createListDnsZoneRecordsTool } from './tools/list-dns-zone-records.js';
+import { createListNameserversTool } from './tools/list-nameservers.js';
+import { createGetNameserverTool } from './tools/get-nameserver.js';
+import { createListNsGroupsTool } from './tools/list-ns-groups.js';
+import { createGetNsGroupTool } from './tools/get-ns-group.js';
+import { createListDnsTemplatesTool } from './tools/list-dns-templates.js';
+import { createGetDnsTemplateTool } from './tools/get-dns-template.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -334,6 +343,15 @@ async function main(): Promise<void> {
         createTransferDomainTool({ client: openproviderClient, tokenManager }),
         createTradeDomainTool({ client: openproviderClient, tokenManager }),
         createRestoreDomainTool({ client: openproviderClient, tokenManager }),
+        createListDnsZonesTool({ client: openproviderClient, tokenManager }),
+        createGetDnsZoneTool({ client: openproviderClient, tokenManager }),
+        createListDnsZoneRecordsTool({ client: openproviderClient, tokenManager }),
+        createListNameserversTool({ client: openproviderClient, tokenManager }),
+        createGetNameserverTool({ client: openproviderClient, tokenManager }),
+        createListNsGroupsTool({ client: openproviderClient, tokenManager }),
+        createGetNsGroupTool({ client: openproviderClient, tokenManager }),
+        createListDnsTemplatesTool({ client: openproviderClient, tokenManager }),
+        createGetDnsTemplateTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.
