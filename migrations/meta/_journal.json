@@ -15,6 +15,7 @@
     { "idx": 10, "version": "5", "when": 1748600000000, "tag": "0011_api_keys", "breakpoints": true },
     { "idx": 11, "version": "5", "when": 1748700000000, "tag": "0012_invitations", "breakpoints": true },
     { "idx": 12, "version": "5", "when": 1748800000000, "tag": "0013_local_auth", "breakpoints": true },
-    { "idx": 13, "version": "5", "when": 1748900000000, "tag": "0014_domain_lifecycle_policy", "breakpoints": true }
+    { "idx": 13, "version": "5", "when": 1748900000000, "tag": "0014_domain_lifecycle_policy", "breakpoints": true },
+    { "idx": 14, "version": "5", "when": 1749000000000, "tag": "0015_dns_policy", "breakpoints": true }
   ]
 }
