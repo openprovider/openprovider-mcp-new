@@ -851,3 +851,199 @@ describe('openprovider client — customer methods', () => {
     });
   });
 });
+
+describe('openprovider client — email, DMARC, and SpamExperts methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listEmailTemplates GETs /emails', async () => {
+    nock(BASE).get(`${PREFIX}/emails`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listEmailTemplates('tok')).toEqual([]);
+  });
+
+  it('createEmailTemplate POSTs /emails with required body', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/emails`,
+        (b: Record<string, unknown>) => b['group'] === 'ive' && b['name'] === 'tpl',
+      )
+      .reply(200, { data: { id: 1 } });
+    expect(
+      await createOpenproviderClient().createEmailTemplate('tok', { group: 'ive', name: 'tpl' }),
+    ).toEqual({ id: 1 });
+  });
+
+  it('updateEmailTemplate PUTs /emails/:id derived from args', async () => {
+    nock(BASE)
+      .put(`${PREFIX}/emails/5`, (b: Record<string, unknown>) => b['id'] === 5)
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateEmailTemplate('tok', {
+        id: 5,
+        group: 'ive',
+        name: 'tpl',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('deleteEmailTemplate DELETEs /emails/:id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/emails/5`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteEmailTemplate('tok', 5)).toEqual({ ok: true });
+  });
+
+  it('listEmailVerificationDomains GETs /customers/verifications/emails/domains', async () => {
+    nock(BASE).get(`${PREFIX}/customers/verifications/emails/domains`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listEmailVerificationDomains('tok')).toEqual([]);
+  });
+
+  it('startEmailVerification POSTs the start endpoint', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/customers/verifications/emails/start`,
+        (b: Record<string, unknown>) => b['email'] === 'a@b.c' && b['handle'] === 'JD-NL',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().startEmailVerification('tok', {
+        email: 'a@b.c',
+        handle: 'JD-NL',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('restartEmailVerification POSTs the restart endpoint', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/customers/verifications/emails/restart`,
+        (b: Record<string, unknown>) => b['email'] === 'a@b.c',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().restartEmailVerification('tok', {
+        email: 'a@b.c',
+        handle: 'JD-NL',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('getDmarc GETs /easydmarcs with dot-notation domain query', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/easydmarcs`)
+      .query({ 'domain.name': 'x', 'domain.extension': 'com' })
+      .reply(200, { data: { id: 1 } });
+    expect(
+      await createOpenproviderClient().getDmarc('tok', { domain: { name: 'x', extension: 'com' } }),
+    ).toEqual({ id: 1 });
+  });
+
+  it('listDmarcSubscriptions GETs /easydmarcs/list', async () => {
+    nock(BASE).get(`${PREFIX}/easydmarcs/list`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listDmarcSubscriptions('tok')).toEqual([]);
+  });
+
+  it('createDmarc POSTs /easydmarcs', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/easydmarcs`, (b: Record<string, unknown>) => b['owner_handle'] === 'OH')
+      .reply(200, { data: { id: 7 } });
+    expect(
+      await createOpenproviderClient().createDmarc('tok', {
+        domain: { name: 'x', extension: 'com' },
+        owner_handle: 'OH',
+      }),
+    ).toEqual({ id: 7 });
+  });
+
+  it('retryDmarc POSTs /easydmarcs/:id/retry', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/easydmarcs/7/retry`, (b: Record<string, unknown>) => b['id'] === 7)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().retryDmarc('tok', { id: 7 })).toEqual({ ok: true });
+  });
+
+  it('dmarcSsoLogin GETs /easydmarcs/:id/sso', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/easydmarcs/7/sso`)
+      .reply(200, { data: { url: 'https://...' } });
+    expect(await createOpenproviderClient().dmarcSsoLogin('tok', { id: 7 })).toEqual({
+      url: 'https://...',
+    });
+  });
+
+  it('deleteDmarc DELETEs /easydmarcs/:id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/easydmarcs/7`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteDmarc('tok', 7)).toEqual({ ok: true });
+  });
+
+  it('getSpamExpertsDomain GETs /spam-expert/domains/:name', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/spam-expert/domains/x.com`)
+      .reply(200, { data: { domain_name: 'x.com' } });
+    expect(await createOpenproviderClient().getSpamExpertsDomain('tok', 'x.com')).toEqual({
+      domain_name: 'x.com',
+    });
+  });
+
+  it('spamExpertsLoginUrl POSTs /spam-expert/generate-login-url', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/spam-expert/generate-login-url`,
+        (b: Record<string, unknown>) => b['domain_or_email'] === 'a@b.c',
+      )
+      .reply(200, { data: { url: 'https://...' } });
+    expect(
+      await createOpenproviderClient().spamExpertsLoginUrl('tok', {
+        bundle: false,
+        domain_or_email: 'a@b.c',
+      }),
+    ).toEqual({ url: 'https://...' });
+  });
+
+  it('createSpamExpertsDomain POSTs /spam-expert/domains', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/spam-expert/domains`,
+        (b: Record<string, unknown>) => b['domain_name'] === 'x.com',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createSpamExpertsDomain('tok', {
+        bundle: false,
+        destinations: [{ hostname: 'h', port: 25 }],
+        domain_name: 'x.com',
+        products: { archiving: false, incoming: true, outgoing: false },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('updateSpamExpertsDomain PUTs /spam-expert/domains/:name', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/spam-expert/domains/x.com`,
+        (b: Record<string, unknown>) => b['domain_name'] === 'x.com',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateSpamExpertsDomain('tok', {
+        domain_name: 'x.com',
+        bundle: false,
+        destinations: [{ hostname: 'h', port: 25 }],
+        products: { archiving: false, incoming: true, outgoing: false },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('deleteSpamExpertsDomain DELETEs /spam-expert/domains/:name', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/spam-expert/domains/x.com`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteSpamExpertsDomain('tok', 'x.com')).toEqual({
+      ok: true,
+    });
+  });
+});

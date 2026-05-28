@@ -46,6 +46,17 @@ import {
   CreateSslOtpTokenArgs,
   CreateCustomerArgs,
   UpdateCustomerArgs,
+  CreateEmailTemplateArgs,
+  UpdateEmailTemplateArgs,
+  StartEmailVerificationArgs,
+  RestartEmailVerificationArgs,
+  GetDmarcArgs,
+  CreateDmarcArgs,
+  RetryDmarcArgs,
+  DmarcSsoLoginArgs,
+  SpamExpertsLoginUrlArgs,
+  CreateSpamExpertsDomainArgs,
+  UpdateSpamExpertsDomainArgs,
 } from './types.js';
 
 export interface OpenproviderClientConfig {
@@ -146,6 +157,28 @@ export interface OpenproviderClient {
   createCustomer(token: string, args: CreateCustomerArgs): Promise<unknown>;
   updateCustomer(token: string, args: UpdateCustomerArgs): Promise<unknown>;
   deleteCustomer(token: string, handle: string): Promise<unknown>;
+  // Email template methods
+  listEmailTemplates(token: string): Promise<unknown>;
+  createEmailTemplate(token: string, args: CreateEmailTemplateArgs): Promise<unknown>;
+  updateEmailTemplate(token: string, args: UpdateEmailTemplateArgs): Promise<unknown>;
+  deleteEmailTemplate(token: string, id: number): Promise<unknown>;
+  // Email verification methods
+  listEmailVerificationDomains(token: string): Promise<unknown>;
+  startEmailVerification(token: string, args: StartEmailVerificationArgs): Promise<unknown>;
+  restartEmailVerification(token: string, args: RestartEmailVerificationArgs): Promise<unknown>;
+  // EasyDmarc methods
+  getDmarc(token: string, args: GetDmarcArgs): Promise<unknown>;
+  listDmarcSubscriptions(token: string): Promise<unknown>;
+  createDmarc(token: string, args: CreateDmarcArgs): Promise<unknown>;
+  retryDmarc(token: string, args: RetryDmarcArgs): Promise<unknown>;
+  dmarcSsoLogin(token: string, args: DmarcSsoLoginArgs): Promise<unknown>;
+  deleteDmarc(token: string, id: number): Promise<unknown>;
+  // SpamExperts methods
+  getSpamExpertsDomain(token: string, domainName: string): Promise<unknown>;
+  spamExpertsLoginUrl(token: string, args: SpamExpertsLoginUrlArgs): Promise<unknown>;
+  createSpamExpertsDomain(token: string, args: CreateSpamExpertsDomainArgs): Promise<unknown>;
+  updateSpamExpertsDomain(token: string, args: UpdateSpamExpertsDomainArgs): Promise<unknown>;
+  deleteSpamExpertsDomain(token: string, domainName: string): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -593,6 +626,109 @@ export function createOpenproviderClient(
     },
     async deleteCustomer(token, handle) {
       const b = await request('DELETE', `/customers/${encodeURIComponent(handle)}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // Email template methods
+    async listEmailTemplates(token) {
+      const b = await request('GET', '/emails', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createEmailTemplate(token, args) {
+      const parsed = CreateEmailTemplateArgs.parse(args);
+      const b = await request('POST', '/emails', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateEmailTemplate(token, args) {
+      const parsed = UpdateEmailTemplateArgs.parse(args);
+      const b = await request('PUT', `/emails/${parsed.id}`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteEmailTemplate(token, id) {
+      const b = await request('DELETE', `/emails/${id}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // Email verification methods
+    async listEmailVerificationDomains(token) {
+      const b = await request('GET', '/customers/verifications/emails/domains', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async startEmailVerification(token, args) {
+      const parsed = StartEmailVerificationArgs.parse(args);
+      const b = await request('POST', '/customers/verifications/emails/start', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async restartEmailVerification(token, args) {
+      const parsed = RestartEmailVerificationArgs.parse(args);
+      const b = await request('POST', '/customers/verifications/emails/restart', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // EasyDmarc methods
+    async getDmarc(token, args) {
+      const parsed = GetDmarcArgs.parse(args);
+      const params = new URLSearchParams();
+      params.append('domain.name', parsed.domain.name);
+      params.append('domain.extension', parsed.domain.extension);
+      const b = await request('GET', `/easydmarcs?${params.toString()}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listDmarcSubscriptions(token) {
+      const b = await request('GET', '/easydmarcs/list', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createDmarc(token, args) {
+      const parsed = CreateDmarcArgs.parse(args);
+      const b = await request('POST', '/easydmarcs', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async retryDmarc(token, args) {
+      const parsed = RetryDmarcArgs.parse(args);
+      const b = await request('POST', `/easydmarcs/${parsed.id}/retry`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async dmarcSsoLogin(token, args) {
+      const parsed = DmarcSsoLoginArgs.parse(args);
+      const b = await request('GET', `/easydmarcs/${parsed.id}/sso`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteDmarc(token, id) {
+      const b = await request('DELETE', `/easydmarcs/${id}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // SpamExperts methods
+    async getSpamExpertsDomain(token, domainName) {
+      const b = await request(
+        'GET',
+        `/spam-expert/domains/${encodeURIComponent(domainName)}`,
+        token,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async spamExpertsLoginUrl(token, args) {
+      const parsed = SpamExpertsLoginUrlArgs.parse(args);
+      const b = await request('POST', '/spam-expert/generate-login-url', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createSpamExpertsDomain(token, args) {
+      const parsed = CreateSpamExpertsDomainArgs.parse(args);
+      const b = await request('POST', '/spam-expert/domains', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateSpamExpertsDomain(token, args) {
+      const parsed = UpdateSpamExpertsDomainArgs.parse(args);
+      const b = await request(
+        'PUT',
+        `/spam-expert/domains/${encodeURIComponent(parsed.domain_name)}`,
+        token,
+        parsed,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteSpamExpertsDomain(token, domainName) {
+      const b = await request(
+        'DELETE',
+        `/spam-expert/domains/${encodeURIComponent(domainName)}`,
+        token,
+      );
       return (b as { data?: unknown }).data ?? b;
     },
     async checkDomain(token, args) {
