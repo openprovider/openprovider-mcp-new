@@ -77,6 +77,24 @@ describe('buildToolCatalog', () => {
         'create_customer',
         'update_customer',
         'delete_customer',
+        'list_email_templates',
+        'create_email_template',
+        'update_email_template',
+        'delete_email_template',
+        'list_email_verification_domains',
+        'start_email_verification',
+        'restart_email_verification',
+        'get_dmarc',
+        'list_dmarc_subscriptions',
+        'create_dmarc',
+        'retry_dmarc',
+        'dmarc_sso_login',
+        'delete_dmarc',
+        'get_spam_experts_domain',
+        'spam_experts_login_url',
+        'create_spam_experts_domain',
+        'update_spam_experts_domain',
+        'delete_spam_experts_domain',
       ].sort(),
     );
     for (const t of cat) {
@@ -85,9 +103,9 @@ describe('buildToolCatalog', () => {
     }
   });
 
-  it('returns 70 tools', () => {
+  it('returns 88 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(70);
+    expect(cat).toHaveLength(88);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {

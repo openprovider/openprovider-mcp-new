@@ -91,6 +91,24 @@ import { createGetCustomerTool } from './tools/get-customer.js';
 import { createCreateCustomerTool } from './tools/create-customer.js';
 import { createUpdateCustomerTool } from './tools/update-customer.js';
 import { createDeleteCustomerTool } from './tools/delete-customer.js';
+import { createListEmailTemplatesTool } from './tools/list-email-templates.js';
+import { createCreateEmailTemplateTool } from './tools/create-email-template.js';
+import { createUpdateEmailTemplateTool } from './tools/update-email-template.js';
+import { createDeleteEmailTemplateTool } from './tools/delete-email-template.js';
+import { createListEmailVerificationDomainsTool } from './tools/list-email-verification-domains.js';
+import { createStartEmailVerificationTool } from './tools/start-email-verification.js';
+import { createRestartEmailVerificationTool } from './tools/restart-email-verification.js';
+import { createGetDmarcTool } from './tools/get-dmarc.js';
+import { createListDmarcSubscriptionsTool } from './tools/list-dmarc-subscriptions.js';
+import { createCreateDmarcTool } from './tools/create-dmarc.js';
+import { createRetryDmarcTool } from './tools/retry-dmarc.js';
+import { createDmarcSsoLoginTool } from './tools/dmarc-sso-login.js';
+import { createDeleteDmarcTool } from './tools/delete-dmarc.js';
+import { createGetSpamExpertsDomainTool } from './tools/get-spam-experts-domain.js';
+import { createSpamExpertsLoginUrlTool } from './tools/spam-experts-login-url.js';
+import { createCreateSpamExpertsDomainTool } from './tools/create-spam-experts-domain.js';
+import { createUpdateSpamExpertsDomainTool } from './tools/update-spam-experts-domain.js';
+import { createDeleteSpamExpertsDomainTool } from './tools/delete-spam-experts-domain.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -428,6 +446,24 @@ async function main(): Promise<void> {
         createCreateCustomerTool({ client: openproviderClient, tokenManager }),
         createUpdateCustomerTool({ client: openproviderClient, tokenManager }),
         createDeleteCustomerTool({ client: openproviderClient, tokenManager }),
+        createListEmailTemplatesTool({ client: openproviderClient, tokenManager }),
+        createCreateEmailTemplateTool({ client: openproviderClient, tokenManager }),
+        createUpdateEmailTemplateTool({ client: openproviderClient, tokenManager }),
+        createDeleteEmailTemplateTool({ client: openproviderClient, tokenManager }),
+        createListEmailVerificationDomainsTool({ client: openproviderClient, tokenManager }),
+        createStartEmailVerificationTool({ client: openproviderClient, tokenManager }),
+        createRestartEmailVerificationTool({ client: openproviderClient, tokenManager }),
+        createGetDmarcTool({ client: openproviderClient, tokenManager }),
+        createListDmarcSubscriptionsTool({ client: openproviderClient, tokenManager }),
+        createCreateDmarcTool({ client: openproviderClient, tokenManager }),
+        createRetryDmarcTool({ client: openproviderClient, tokenManager }),
+        createDmarcSsoLoginTool({ client: openproviderClient, tokenManager }),
+        createDeleteDmarcTool({ client: openproviderClient, tokenManager }),
+        createGetSpamExpertsDomainTool({ client: openproviderClient, tokenManager }),
+        createSpamExpertsLoginUrlTool({ client: openproviderClient, tokenManager }),
+        createCreateSpamExpertsDomainTool({ client: openproviderClient, tokenManager }),
+        createUpdateSpamExpertsDomainTool({ client: openproviderClient, tokenManager }),
+        createDeleteSpamExpertsDomainTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.

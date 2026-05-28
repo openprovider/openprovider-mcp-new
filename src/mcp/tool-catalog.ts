@@ -73,6 +73,24 @@ import { createGetCustomerTool } from '../tools/get-customer.js';
 import { createCreateCustomerTool } from '../tools/create-customer.js';
 import { createUpdateCustomerTool } from '../tools/update-customer.js';
 import { createDeleteCustomerTool } from '../tools/delete-customer.js';
+import { createListEmailTemplatesTool } from '../tools/list-email-templates.js';
+import { createCreateEmailTemplateTool } from '../tools/create-email-template.js';
+import { createUpdateEmailTemplateTool } from '../tools/update-email-template.js';
+import { createDeleteEmailTemplateTool } from '../tools/delete-email-template.js';
+import { createListEmailVerificationDomainsTool } from '../tools/list-email-verification-domains.js';
+import { createStartEmailVerificationTool } from '../tools/start-email-verification.js';
+import { createRestartEmailVerificationTool } from '../tools/restart-email-verification.js';
+import { createGetDmarcTool } from '../tools/get-dmarc.js';
+import { createListDmarcSubscriptionsTool } from '../tools/list-dmarc-subscriptions.js';
+import { createCreateDmarcTool } from '../tools/create-dmarc.js';
+import { createRetryDmarcTool } from '../tools/retry-dmarc.js';
+import { createDmarcSsoLoginTool } from '../tools/dmarc-sso-login.js';
+import { createDeleteDmarcTool } from '../tools/delete-dmarc.js';
+import { createGetSpamExpertsDomainTool } from '../tools/get-spam-experts-domain.js';
+import { createSpamExpertsLoginUrlTool } from '../tools/spam-experts-login-url.js';
+import { createCreateSpamExpertsDomainTool } from '../tools/create-spam-experts-domain.js';
+import { createUpdateSpamExpertsDomainTool } from '../tools/update-spam-experts-domain.js';
+import { createDeleteSpamExpertsDomainTool } from '../tools/delete-spam-experts-domain.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -165,6 +183,24 @@ export function buildToolCatalog(): ToolEntry[] {
     createCreateCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
     createUpdateCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
     createDeleteCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListEmailTemplatesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateEmailTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateEmailTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteEmailTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListEmailVerificationDomainsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createStartEmailVerificationTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRestartEmailVerificationTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDmarcSubscriptionsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRetryDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDmarcSsoLoginTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createSpamExpertsLoginUrlTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({
