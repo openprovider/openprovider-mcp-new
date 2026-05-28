@@ -98,6 +98,15 @@ function clientWith(price: { price: number; currency: string } | undefined, isPr
     createSpamExpertsDomain: vi.fn(),
     updateSpamExpertsDomain: vi.fn(),
     deleteSpamExpertsDomain: vi.fn(),
+    listLicensePrices: vi.fn(),
+    listLicenseItems: vi.fn(),
+    listPleskLicenses: vi.fn(),
+    getPleskLicense: vi.fn(),
+    getPleskKey: vi.fn(),
+    createPleskLicense: vi.fn(),
+    updatePleskLicense: vi.fn(),
+    resetPleskHwid: vi.fn(),
+    deletePleskLicense: vi.fn(),
   };
 }
 

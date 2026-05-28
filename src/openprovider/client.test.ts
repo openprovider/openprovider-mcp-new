@@ -1047,3 +1047,77 @@ describe('openprovider client — email, DMARC, and SpamExperts methods', () => 
     });
   });
 });
+
+describe('openprovider client — license methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listLicensePrices GETs /licenses', async () => {
+    nock(BASE).get(`${PREFIX}/licenses`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listLicensePrices('tok')).toEqual([]);
+  });
+  it('listLicenseItems GETs /licenses/items', async () => {
+    nock(BASE).get(`${PREFIX}/licenses/items`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listLicenseItems('tok')).toEqual([]);
+  });
+  it('listPleskLicenses GETs /licenses/plesk', async () => {
+    nock(BASE).get(`${PREFIX}/licenses/plesk`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listPleskLicenses('tok')).toEqual([]);
+  });
+  it('getPleskLicense GETs /licenses/plesk/:key_id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/licenses/plesk/7`)
+      .reply(200, { data: { key_id: 7 } });
+    expect(await createOpenproviderClient().getPleskLicense('tok', 7)).toEqual({ key_id: 7 });
+  });
+  it('getPleskKey GETs /licenses/plesk/key/:key_id (literal key before id)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/licenses/plesk/key/7`)
+      .reply(200, { data: { key: 'XX' } });
+    expect(await createOpenproviderClient().getPleskKey('tok', 7)).toEqual({ key: 'XX' });
+  });
+  it('createPleskLicense POSTs /licenses/plesk', async () => {
+    const valid = { items: ['SKU'], period: 1, ip_address_binding: '127.0.0.1', title: 'T' };
+    nock(BASE)
+      .post(
+        `${PREFIX}/licenses/plesk`,
+        (b: Record<string, unknown>) => Array.isArray(b['items']) && b['period'] === 1,
+      )
+      .reply(200, { data: { key_id: 7 } });
+    expect(await createOpenproviderClient().createPleskLicense('tok', valid)).toEqual({
+      key_id: 7,
+    });
+  });
+  it('updatePleskLicense PUTs /licenses/plesk/:key_id with body', async () => {
+    const body = {
+      key_id: 5,
+      items: ['SKU'],
+      period: 1,
+      ip_address_binding: '127.0.0.1',
+      title: 'T',
+    };
+    nock(BASE)
+      .put(`${PREFIX}/licenses/plesk/5`, (b: Record<string, unknown>) => b['key_id'] === 5)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().updatePleskLicense('tok', body)).toEqual({ ok: true });
+  });
+  it('resetPleskHwid POSTs /licenses/hwids/reset/:product/:key_id', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/licenses/hwids/reset/plesk/5`,
+        (b: Record<string, unknown>) => b['key_id'] === 5 && b['product'] === 'plesk',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().resetPleskHwid('tok', { key_id: 5, product: 'plesk' }),
+    ).toEqual({ ok: true });
+  });
+  it('deletePleskLicense DELETEs /licenses/plesk/:key_id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/licenses/plesk/7`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deletePleskLicense('tok', 7)).toEqual({ ok: true });
+  });
+});

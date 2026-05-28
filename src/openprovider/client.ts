@@ -57,6 +57,9 @@ import {
   SpamExpertsLoginUrlArgs,
   CreateSpamExpertsDomainArgs,
   UpdateSpamExpertsDomainArgs,
+  CreatePleskLicenseArgs,
+  UpdatePleskLicenseArgs,
+  ResetPleskHwidArgs,
 } from './types.js';
 
 export interface OpenproviderClientConfig {
@@ -179,6 +182,16 @@ export interface OpenproviderClient {
   createSpamExpertsDomain(token: string, args: CreateSpamExpertsDomainArgs): Promise<unknown>;
   updateSpamExpertsDomain(token: string, args: UpdateSpamExpertsDomainArgs): Promise<unknown>;
   deleteSpamExpertsDomain(token: string, domainName: string): Promise<unknown>;
+  // License methods
+  listLicensePrices(token: string): Promise<unknown>;
+  listLicenseItems(token: string): Promise<unknown>;
+  listPleskLicenses(token: string): Promise<unknown>;
+  getPleskLicense(token: string, keyId: number): Promise<unknown>;
+  getPleskKey(token: string, keyId: number): Promise<unknown>;
+  createPleskLicense(token: string, args: CreatePleskLicenseArgs): Promise<unknown>;
+  updatePleskLicense(token: string, args: UpdatePleskLicenseArgs): Promise<unknown>;
+  resetPleskHwid(token: string, args: ResetPleskHwidArgs): Promise<unknown>;
+  deletePleskLicense(token: string, keyId: number): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -729,6 +742,51 @@ export function createOpenproviderClient(
         `/spam-expert/domains/${encodeURIComponent(domainName)}`,
         token,
       );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // License methods
+    async listLicensePrices(token) {
+      const b = await request('GET', '/licenses', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listLicenseItems(token) {
+      const b = await request('GET', '/licenses/items', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listPleskLicenses(token) {
+      const b = await request('GET', '/licenses/plesk', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getPleskLicense(token, keyId) {
+      const b = await request('GET', `/licenses/plesk/${keyId}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getPleskKey(token, keyId) {
+      const b = await request('GET', `/licenses/plesk/key/${keyId}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createPleskLicense(token, args) {
+      const parsed = CreatePleskLicenseArgs.parse(args);
+      const b = await request('POST', '/licenses/plesk', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updatePleskLicense(token, args) {
+      const parsed = UpdatePleskLicenseArgs.parse(args);
+      const b = await request('PUT', `/licenses/plesk/${parsed.key_id}`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async resetPleskHwid(token, args) {
+      const parsed = ResetPleskHwidArgs.parse(args);
+      const b = await request(
+        'POST',
+        `/licenses/hwids/reset/${encodeURIComponent(parsed.product)}/${parsed.key_id}`,
+        token,
+        parsed,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deletePleskLicense(token, keyId) {
+      const b = await request('DELETE', `/licenses/plesk/${keyId}`, token);
       return (b as { data?: unknown }).data ?? b;
     },
     async checkDomain(token, args) {
