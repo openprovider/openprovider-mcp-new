@@ -95,6 +95,15 @@ describe('buildToolCatalog', () => {
         'create_spam_experts_domain',
         'update_spam_experts_domain',
         'delete_spam_experts_domain',
+        'list_license_prices',
+        'list_license_items',
+        'list_plesk_licenses',
+        'get_plesk_license',
+        'get_plesk_key',
+        'create_plesk_license',
+        'update_plesk_license',
+        'reset_plesk_hwid',
+        'delete_plesk_license',
       ].sort(),
     );
     for (const t of cat) {
@@ -105,7 +114,7 @@ describe('buildToolCatalog', () => {
 
   it('returns 88 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(88);
+    expect(cat).toHaveLength(97);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {

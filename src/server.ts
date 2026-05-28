@@ -109,6 +109,15 @@ import { createSpamExpertsLoginUrlTool } from './tools/spam-experts-login-url.js
 import { createCreateSpamExpertsDomainTool } from './tools/create-spam-experts-domain.js';
 import { createUpdateSpamExpertsDomainTool } from './tools/update-spam-experts-domain.js';
 import { createDeleteSpamExpertsDomainTool } from './tools/delete-spam-experts-domain.js';
+import { createListLicensePricesTool } from './tools/list-license-prices.js';
+import { createListLicenseItemsTool } from './tools/list-license-items.js';
+import { createListPleskLicensesTool } from './tools/list-plesk-licenses.js';
+import { createGetPleskLicenseTool } from './tools/get-plesk-license.js';
+import { createGetPleskKeyTool } from './tools/get-plesk-key.js';
+import { createCreatePleskLicenseTool } from './tools/create-plesk-license.js';
+import { createUpdatePleskLicenseTool } from './tools/update-plesk-license.js';
+import { createResetPleskHwidTool } from './tools/reset-plesk-hwid.js';
+import { createDeletePleskLicenseTool } from './tools/delete-plesk-license.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -464,6 +473,15 @@ async function main(): Promise<void> {
         createCreateSpamExpertsDomainTool({ client: openproviderClient, tokenManager }),
         createUpdateSpamExpertsDomainTool({ client: openproviderClient, tokenManager }),
         createDeleteSpamExpertsDomainTool({ client: openproviderClient, tokenManager }),
+        createListLicensePricesTool({ client: openproviderClient, tokenManager }),
+        createListLicenseItemsTool({ client: openproviderClient, tokenManager }),
+        createListPleskLicensesTool({ client: openproviderClient, tokenManager }),
+        createGetPleskLicenseTool({ client: openproviderClient, tokenManager }),
+        createGetPleskKeyTool({ client: openproviderClient, tokenManager }),
+        createCreatePleskLicenseTool({ client: openproviderClient, tokenManager }),
+        createUpdatePleskLicenseTool({ client: openproviderClient, tokenManager }),
+        createResetPleskHwidTool({ client: openproviderClient, tokenManager }),
+        createDeletePleskLicenseTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.

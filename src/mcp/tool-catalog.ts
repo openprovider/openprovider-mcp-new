@@ -91,6 +91,15 @@ import { createSpamExpertsLoginUrlTool } from '../tools/spam-experts-login-url.j
 import { createCreateSpamExpertsDomainTool } from '../tools/create-spam-experts-domain.js';
 import { createUpdateSpamExpertsDomainTool } from '../tools/update-spam-experts-domain.js';
 import { createDeleteSpamExpertsDomainTool } from '../tools/delete-spam-experts-domain.js';
+import { createListLicensePricesTool } from '../tools/list-license-prices.js';
+import { createListLicenseItemsTool } from '../tools/list-license-items.js';
+import { createListPleskLicensesTool } from '../tools/list-plesk-licenses.js';
+import { createGetPleskLicenseTool } from '../tools/get-plesk-license.js';
+import { createGetPleskKeyTool } from '../tools/get-plesk-key.js';
+import { createCreatePleskLicenseTool } from '../tools/create-plesk-license.js';
+import { createUpdatePleskLicenseTool } from '../tools/update-plesk-license.js';
+import { createResetPleskHwidTool } from '../tools/reset-plesk-hwid.js';
+import { createDeletePleskLicenseTool } from '../tools/delete-plesk-license.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -201,6 +210,15 @@ export function buildToolCatalog(): ToolEntry[] {
     createCreateSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
     createUpdateSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
     createDeleteSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListLicensePricesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListLicenseItemsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListPleskLicensesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetPleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetPleskKeyTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreatePleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdatePleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createResetPleskHwidTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeletePleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({
