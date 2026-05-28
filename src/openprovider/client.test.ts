@@ -272,3 +272,229 @@ describe('openprovider client — domain lifecycle methods', () => {
     expect(await client.restoreDomain('tok', { id: 42 })).toEqual({ id: 42 });
   });
 });
+
+describe('openprovider client — DNS methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  // --- reads ---
+
+  it('listDnsZones GETs /dns/zones', async () => {
+    nock(BASE).get(`${PREFIX}/dns/zones`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listDnsZones('tok')).toEqual([]);
+  });
+
+  it('getDnsZone GETs /dns/zones/:name (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/zones/example.com`)
+      .reply(200, { data: { name: 'example.com' } });
+    expect(await createOpenproviderClient().getDnsZone('tok', 'example.com')).toEqual({
+      name: 'example.com',
+    });
+  });
+
+  it('listDnsZoneRecords GETs /dns/zones/:name/records', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/zones/example.com/records`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listDnsZoneRecords('tok', 'example.com')).toEqual({
+      results: [],
+    });
+  });
+
+  it('listNameservers GETs /dns/nameservers', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listNameservers('tok')).toEqual({ results: [] });
+  });
+
+  it('getNameserver GETs /dns/nameservers/:name (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers/ns1.example.com`)
+      .reply(200, { data: { name: 'ns1.example.com' } });
+    expect(await createOpenproviderClient().getNameserver('tok', 'ns1.example.com')).toEqual({
+      name: 'ns1.example.com',
+    });
+  });
+
+  it('listNsGroups GETs /dns/nameservers/groups', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers/groups`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listNsGroups('tok')).toEqual({ results: [] });
+  });
+
+  it('getNsGroup GETs /dns/nameservers/groups/:nsGroup (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers/groups/my-group`)
+      .reply(200, { data: { ns_group: 'my-group' } });
+    expect(await createOpenproviderClient().getNsGroup('tok', 'my-group')).toEqual({
+      ns_group: 'my-group',
+    });
+  });
+
+  it('listDnsTemplates GETs /dns/templates', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/templates`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listDnsTemplates('tok')).toEqual({ results: [] });
+  });
+
+  it('getDnsTemplate GETs /dns/templates/:id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/templates/7`)
+      .reply(200, { data: { id: 7 } });
+    expect(await createOpenproviderClient().getDnsTemplate('tok', 7)).toEqual({ id: 7 });
+  });
+
+  // --- writes ---
+
+  it('createDnsZone POSTs /dns/zones with flat records', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/dns/zones`, (b: Record<string, unknown>) => Array.isArray(b['records']))
+      .reply(200, { data: { id: 1 } });
+    expect(
+      await createOpenproviderClient().createDnsZone('tok', {
+        domain: { name: 'x', extension: 'com' },
+        provider: 'openprovider',
+        type: 'master',
+        records: [{ type: 'A', value: '1.2.3.4', ttl: 3600 }],
+      }),
+    ).toEqual({ id: 1 });
+  });
+
+  it('updateDnsZone PUTs /dns/zones/:name derived from domain', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/dns/zones/x.com`,
+        (b: Record<string, unknown>) =>
+          typeof b['records'] === 'object' && !Array.isArray(b['records']),
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateDnsZone('tok', {
+        domain: { name: 'x', extension: 'com' },
+        records: { add: [{ type: 'A', value: '1.2.3.4', ttl: 3600 }] },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('createNameserver POSTs /dns/nameservers with name+ip in body', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/dns/nameservers`,
+        (b: Record<string, unknown>) =>
+          typeof b['name'] === 'string' && typeof b['ip'] === 'string',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createNameserver('tok', {
+        name: 'ns1.x.com',
+        ip: '1.2.3.4',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('updateNameserver PUTs /dns/nameservers/:name with ip in body', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/dns/nameservers/ns1.x.com`,
+        (b: Record<string, unknown>) => typeof b['ip'] === 'string',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateNameserver('tok', {
+        name: 'ns1.x.com',
+        ip: '5.6.7.8',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('createNsGroup POSTs /dns/nameservers/groups', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/dns/nameservers/groups`,
+        (b: Record<string, unknown>) => typeof b['ns_group'] === 'string',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createNsGroup('tok', {
+        ns_group: 'G',
+        name_servers: [{ name: 'ns1.x.com', ip: '1.2.3.4', seq_nr: 0 }],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('updateNsGroup PUTs /dns/nameservers/groups/:nsGroup with name_servers in body', async () => {
+    nock(BASE)
+      .put(`${PREFIX}/dns/nameservers/groups/G`, (b: Record<string, unknown>) =>
+        Array.isArray(b['name_servers']),
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateNsGroup('tok', {
+        ns_group: 'G',
+        name_servers: [{ name: 'ns1.x.com', ip: '1.2.3.4', seq_nr: 0 }],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('createDnsTemplate POSTs /dns/templates with name in body', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/dns/templates`,
+        (b: Record<string, unknown>) => typeof b['name'] === 'string',
+      )
+      .reply(200, { data: { id: 5 } });
+    expect(
+      await createOpenproviderClient().createDnsTemplate('tok', { name: 'my-template' }),
+    ).toEqual({ id: 5 });
+  });
+
+  it('createDomainToken POSTs /dns/domain-token', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/dns/domain-token`, (b: Record<string, unknown>) => b['domain'] === 'x.com')
+      .reply(200, { data: { token: 't' } });
+    expect(
+      await createOpenproviderClient().createDomainToken('tok', {
+        domain: 'x.com',
+        zone_provider: 'openprovider',
+      }),
+    ).toEqual({ token: 't' });
+  });
+
+  // --- deletes ---
+
+  it('deleteDnsZone DELETEs /dns/zones/:name', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/zones/x.com`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteDnsZone('tok', 'x.com')).toEqual({ ok: true });
+  });
+
+  it('deleteNameserver DELETEs /dns/nameservers/:name', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/nameservers/ns1.x.com`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteNameserver('tok', 'ns1.x.com')).toEqual({
+      ok: true,
+    });
+  });
+
+  it('deleteNsGroup DELETEs /dns/nameservers/groups/:nsGroup', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/nameservers/groups/G`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteNsGroup('tok', 'G')).toEqual({ ok: true });
+  });
+
+  it('deleteDnsTemplate DELETEs /dns/templates/:id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/templates/7`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteDnsTemplate('tok', 7)).toEqual({ ok: true });
+  });
+});

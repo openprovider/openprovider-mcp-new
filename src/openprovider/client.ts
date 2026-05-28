@@ -22,6 +22,14 @@ import {
   TradeDomainArgs,
   RestoreDomainArgs,
   RestartDomainOperationArgs,
+  CreateDnsZoneArgs,
+  UpdateDnsZoneArgs,
+  CreateNameserverArgs,
+  UpdateNameserverArgs,
+  CreateNsGroupArgs,
+  UpdateNsGroupArgs,
+  CreateDnsTemplateArgs,
+  CreateDomainTokenArgs,
 } from './types.js';
 
 export interface OpenproviderClientConfig {
@@ -71,6 +79,28 @@ export interface OpenproviderClient {
   transferDomain(token: string, args: TransferDomainArgs): Promise<unknown>;
   tradeDomain(token: string, args: TradeDomainArgs): Promise<unknown>;
   restoreDomain(token: string, args: RestoreDomainArgs): Promise<unknown>;
+  // DNS methods
+  listDnsZones(token: string): Promise<unknown>;
+  getDnsZone(token: string, name: string): Promise<unknown>;
+  listDnsZoneRecords(token: string, name: string): Promise<unknown>;
+  listNameservers(token: string): Promise<unknown>;
+  getNameserver(token: string, name: string): Promise<unknown>;
+  listNsGroups(token: string): Promise<unknown>;
+  getNsGroup(token: string, nsGroup: string): Promise<unknown>;
+  listDnsTemplates(token: string): Promise<unknown>;
+  getDnsTemplate(token: string, id: number): Promise<unknown>;
+  createDnsZone(token: string, args: CreateDnsZoneArgs): Promise<unknown>;
+  updateDnsZone(token: string, args: UpdateDnsZoneArgs): Promise<unknown>;
+  createNameserver(token: string, args: CreateNameserverArgs): Promise<unknown>;
+  updateNameserver(token: string, args: UpdateNameserverArgs): Promise<unknown>;
+  createNsGroup(token: string, args: CreateNsGroupArgs): Promise<unknown>;
+  updateNsGroup(token: string, args: UpdateNsGroupArgs): Promise<unknown>;
+  createDnsTemplate(token: string, args: CreateDnsTemplateArgs): Promise<unknown>;
+  createDomainToken(token: string, args: CreateDomainTokenArgs): Promise<unknown>;
+  deleteDnsZone(token: string, name: string): Promise<unknown>;
+  deleteNameserver(token: string, name: string): Promise<unknown>;
+  deleteNsGroup(token: string, nsGroup: string): Promise<unknown>;
+  deleteDnsTemplate(token: string, id: number): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -262,6 +292,120 @@ export function createOpenproviderClient(
       const parsed = RestoreDomainArgs.parse(args);
       const body = await request('POST', `/domains/${parsed.id}/restore`, token, parsed);
       return (body as { data?: unknown }).data ?? body;
+    },
+    // DNS reads
+    async listDnsZones(token) {
+      const b = await request('GET', '/dns/zones', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getDnsZone(token, name) {
+      const b = await request('GET', `/dns/zones/${encodeURIComponent(name)}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listDnsZoneRecords(token, name) {
+      const b = await request('GET', `/dns/zones/${encodeURIComponent(name)}/records`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listNameservers(token) {
+      const b = await request('GET', '/dns/nameservers', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getNameserver(token, name) {
+      const b = await request('GET', `/dns/nameservers/${encodeURIComponent(name)}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listNsGroups(token) {
+      const b = await request('GET', '/dns/nameservers/groups', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getNsGroup(token, nsGroup) {
+      const b = await request(
+        'GET',
+        `/dns/nameservers/groups/${encodeURIComponent(nsGroup)}`,
+        token,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listDnsTemplates(token) {
+      const b = await request('GET', '/dns/templates', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getDnsTemplate(token, id) {
+      const b = await request('GET', `/dns/templates/${id}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // DNS writes
+    async createDnsZone(token, args) {
+      const parsed = CreateDnsZoneArgs.parse(args);
+      const b = await request('POST', '/dns/zones', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateDnsZone(token, args) {
+      const parsed = UpdateDnsZoneArgs.parse(args);
+      const name = `${parsed.domain.name}.${parsed.domain.extension}`;
+      const b = await request('PUT', `/dns/zones/${encodeURIComponent(name)}`, token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createNameserver(token, args) {
+      const parsed = CreateNameserverArgs.parse(args);
+      const b = await request('POST', '/dns/nameservers', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateNameserver(token, args) {
+      const parsed = UpdateNameserverArgs.parse(args);
+      const b = await request(
+        'PUT',
+        `/dns/nameservers/${encodeURIComponent(parsed.name)}`,
+        token,
+        parsed,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createNsGroup(token, args) {
+      const parsed = CreateNsGroupArgs.parse(args);
+      const b = await request('POST', '/dns/nameservers/groups', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async updateNsGroup(token, args) {
+      const parsed = UpdateNsGroupArgs.parse(args);
+      const b = await request(
+        'PUT',
+        `/dns/nameservers/groups/${encodeURIComponent(parsed.ns_group)}`,
+        token,
+        parsed,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createDnsTemplate(token, args) {
+      const parsed = CreateDnsTemplateArgs.parse(args);
+      const b = await request('POST', '/dns/templates', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createDomainToken(token, args) {
+      const parsed = CreateDomainTokenArgs.parse(args);
+      const b = await request('POST', '/dns/domain-token', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // DNS deletes
+    async deleteDnsZone(token, name) {
+      const b = await request('DELETE', `/dns/zones/${encodeURIComponent(name)}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteNameserver(token, name) {
+      const b = await request('DELETE', `/dns/nameservers/${encodeURIComponent(name)}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteNsGroup(token, nsGroup) {
+      const b = await request(
+        'DELETE',
+        `/dns/nameservers/groups/${encodeURIComponent(nsGroup)}`,
+        token,
+      );
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteDnsTemplate(token, id) {
+      const b = await request('DELETE', `/dns/templates/${id}`, token);
+      return (b as { data?: unknown }).data ?? b;
     },
     async checkDomain(token, args) {
       const parsedArgs = CheckDomainArgs.parse(args);
