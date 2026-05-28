@@ -39,6 +39,14 @@ describe('buildToolCatalog', () => {
         'get_ns_group',
         'list_dns_templates',
         'get_dns_template',
+        'create_dns_zone',
+        'update_dns_zone',
+        'create_nameserver',
+        'update_nameserver',
+        'create_ns_group',
+        'update_ns_group',
+        'create_dns_template',
+        'create_domain_token',
       ].sort(),
     );
     for (const t of cat) {
@@ -47,9 +55,9 @@ describe('buildToolCatalog', () => {
     }
   });
 
-  it('returns 32 tools', () => {
+  it('returns 40 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(32);
+    expect(cat).toHaveLength(40);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {

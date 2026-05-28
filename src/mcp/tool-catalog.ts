@@ -35,6 +35,14 @@ import { createListNsGroupsTool } from '../tools/list-ns-groups.js';
 import { createGetNsGroupTool } from '../tools/get-ns-group.js';
 import { createListDnsTemplatesTool } from '../tools/list-dns-templates.js';
 import { createGetDnsTemplateTool } from '../tools/get-dns-template.js';
+import { createCreateDnsZoneTool } from '../tools/create-dns-zone.js';
+import { createUpdateDnsZoneTool } from '../tools/update-dns-zone.js';
+import { createCreateNameserverTool } from '../tools/create-nameserver.js';
+import { createUpdateNameserverTool } from '../tools/update-nameserver.js';
+import { createCreateNsGroupTool } from '../tools/create-ns-group.js';
+import { createUpdateNsGroupTool } from '../tools/update-ns-group.js';
+import { createCreateDnsTemplateTool } from '../tools/create-dns-template.js';
+import { createCreateDomainTokenTool } from '../tools/create-domain-token.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -89,6 +97,14 @@ export function buildToolCatalog(): ToolEntry[] {
     createGetNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
     createListDnsTemplatesTool({ client: stubClient, tokenManager: stubTokenManager }),
     createGetDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDomainTokenTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({
