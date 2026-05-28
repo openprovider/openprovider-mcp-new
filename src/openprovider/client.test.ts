@@ -498,3 +498,81 @@ describe('openprovider client — DNS methods', () => {
     expect(await createOpenproviderClient().deleteDnsTemplate('tok', 7)).toEqual({ ok: true });
   });
 });
+
+describe('openprovider client — catalog + tag methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listTlds GETs /tlds', async () => {
+    nock(BASE).get(`${PREFIX}/tlds`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listTlds('tok')).toEqual([]);
+  });
+
+  it('getTld GETs /tlds/:name (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/tlds/co.uk`)
+      .reply(200, { data: { name: 'co.uk' } });
+    expect(await createOpenproviderClient().getTld('tok', 'co.uk')).toEqual({ name: 'co.uk' });
+  });
+
+  it('getDomainPrice GETs /domains/prices with dot-notation query', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/domains/prices`)
+      .query({ 'domain.name': 'x', 'domain.extension': 'com', operation: 'create' })
+      .reply(200, { data: { price: { product: { price: 9.99 } } } });
+    expect(
+      await createOpenproviderClient().getDomainPrice('tok', {
+        domain: { name: 'x', extension: 'com' },
+        operation: 'create',
+      }),
+    ).toEqual({ price: { product: { price: 9.99 } } });
+  });
+
+  it('getDomainPrice includes idn_script when provided', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/domains/prices`)
+      .query({
+        'domain.name': 'x',
+        'domain.extension': 'com',
+        operation: 'create',
+        'additional_data.idn_script': 'cyrl',
+      })
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().getDomainPrice('tok', {
+        domain: { name: 'x', extension: 'com' },
+        operation: 'create',
+        additional_data: { idn_script: 'cyrl' },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('listTags GETs /tags', async () => {
+    nock(BASE).get(`${PREFIX}/tags`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listTags('tok')).toEqual([]);
+  });
+
+  it('createTag POSTs /tags with {key,value}', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/tags`,
+        (b: Record<string, unknown>) => b['key'] === 'customer' && b['value'] === 'Tech',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createTag('tok', { key: 'customer', value: 'Tech' }),
+    ).toEqual({ ok: true });
+  });
+
+  it('deleteTag DELETEs /tags?key=...&value=...', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/tags`)
+      .query({ key: 'customer', value: 'Tech' })
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().deleteTag('tok', { key: 'customer', value: 'Tech' }),
+    ).toEqual({ ok: true });
+  });
+});

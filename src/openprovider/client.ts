@@ -30,6 +30,9 @@ import {
   UpdateNsGroupArgs,
   CreateDnsTemplateArgs,
   CreateDomainTokenArgs,
+  GetDomainPriceArgs,
+  CreateTagArgs,
+  DeleteTagArgs,
 } from './types.js';
 
 export interface OpenproviderClientConfig {
@@ -101,6 +104,13 @@ export interface OpenproviderClient {
   deleteNameserver(token: string, name: string): Promise<unknown>;
   deleteNsGroup(token: string, nsGroup: string): Promise<unknown>;
   deleteDnsTemplate(token: string, id: number): Promise<unknown>;
+  // Catalog + tag methods
+  listTlds(token: string): Promise<unknown>;
+  getTld(token: string, name: string): Promise<unknown>;
+  getDomainPrice(token: string, args: GetDomainPriceArgs): Promise<unknown>;
+  listTags(token: string): Promise<unknown>;
+  createTag(token: string, args: CreateTagArgs): Promise<unknown>;
+  deleteTag(token: string, args: DeleteTagArgs): Promise<unknown>;
 }
 
 const DEFAULT_BASE = 'https://api.openprovider.eu/v1beta';
@@ -405,6 +415,42 @@ export function createOpenproviderClient(
     },
     async deleteDnsTemplate(token, id) {
       const b = await request('DELETE', `/dns/templates/${id}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    // Catalog + tag methods
+    async listTlds(token) {
+      const b = await request('GET', '/tlds', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getTld(token, name) {
+      const b = await request('GET', `/tlds/${encodeURIComponent(name)}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async getDomainPrice(token, args) {
+      const parsed = GetDomainPriceArgs.parse(args);
+      const params = new URLSearchParams();
+      params.append('domain.name', parsed.domain.name);
+      params.append('domain.extension', parsed.domain.extension);
+      params.append('operation', parsed.operation);
+      if (parsed.additional_data?.idn_script) {
+        params.append('additional_data.idn_script', parsed.additional_data.idn_script);
+      }
+      const b = await request('GET', `/domains/prices?${params.toString()}`, token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async listTags(token) {
+      const b = await request('GET', '/tags', token);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async createTag(token, args) {
+      const parsed = CreateTagArgs.parse(args);
+      const b = await request('POST', '/tags', token, parsed);
+      return (b as { data?: unknown }).data ?? b;
+    },
+    async deleteTag(token, args) {
+      const parsed = DeleteTagArgs.parse(args);
+      const params = new URLSearchParams({ key: parsed.key, value: parsed.value });
+      const b = await request('DELETE', `/tags?${params.toString()}`, token);
       return (b as { data?: unknown }).data ?? b;
     },
     async checkDomain(token, args) {

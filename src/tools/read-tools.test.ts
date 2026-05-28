@@ -59,6 +59,12 @@ function deps() {
       deleteNameserver: vi.fn(),
       deleteNsGroup: vi.fn(),
       deleteDnsTemplate: vi.fn(),
+      listTlds: vi.fn(),
+      getTld: vi.fn(),
+      getDomainPrice: vi.fn(),
+      listTags: vi.fn(),
+      createTag: vi.fn(),
+      deleteTag: vi.fn(),
     },
     tokenManager: { getToken: vi.fn().mockResolvedValue('jwt'), invalidate: vi.fn() },
   };

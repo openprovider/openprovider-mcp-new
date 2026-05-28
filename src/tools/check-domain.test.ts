@@ -58,6 +58,12 @@ describe('check_domain tool', () => {
       deleteNameserver: vi.fn(),
       deleteNsGroup: vi.fn(),
       deleteDnsTemplate: vi.fn(),
+      listTlds: vi.fn(),
+      getTld: vi.fn(),
+      getDomainPrice: vi.fn(),
+      listTags: vi.fn(),
+      createTag: vi.fn(),
+      deleteTag: vi.fn(),
     };
     const tokenManager = {
       getToken: vi.fn().mockResolvedValue('jwt'),
@@ -124,6 +130,12 @@ describe('check_domain tool', () => {
       deleteNameserver: vi.fn(),
       deleteNsGroup: vi.fn(),
       deleteDnsTemplate: vi.fn(),
+      listTlds: vi.fn(),
+      getTld: vi.fn(),
+      getDomainPrice: vi.fn(),
+      listTags: vi.fn(),
+      createTag: vi.fn(),
+      deleteTag: vi.fn(),
     };
     const tokenManager = {
       getToken: vi.fn().mockResolvedValue('jwt'),

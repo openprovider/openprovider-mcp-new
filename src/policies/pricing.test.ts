@@ -54,6 +54,12 @@ function clientWith(price: { price: number; currency: string } | undefined, isPr
     deleteNameserver: vi.fn(),
     deleteNsGroup: vi.fn(),
     deleteDnsTemplate: vi.fn(),
+    listTlds: vi.fn(),
+    getTld: vi.fn(),
+    getDomainPrice: vi.fn(),
+    listTags: vi.fn(),
+    createTag: vi.fn(),
+    deleteTag: vi.fn(),
   };
 }
 
