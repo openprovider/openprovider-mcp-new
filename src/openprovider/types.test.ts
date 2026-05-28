@@ -41,6 +41,7 @@ import {
   DecodeCsrArgs,
   CreateSslOtpTokenArgs,
 } from './types.js';
+import { CustomerHandleArg, CreateCustomerArgs, UpdateCustomerArgs } from './types.js';
 
 describe('batch1 domain-lifecycle schemas', () => {
   it('DomainIdArg requires positive int id', () => {
@@ -367,5 +368,58 @@ describe('batch4 SSL schemas', () => {
     expect(CreateSslOtpTokenArgs.safeParse({ id: 10 }).success).toBe(true);
     expect(CreateSslOtpTokenArgs.safeParse({ id: 0 }).success).toBe(false);
     expect(CreateSslOtpTokenArgs.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('batch5 customer schemas', () => {
+  it('CustomerHandleArg requires handle', () => {
+    expect(CustomerHandleArg.safeParse({ handle: 'JD123-NL' }).success).toBe(true);
+    expect(CustomerHandleArg.safeParse({}).success).toBe(false);
+  });
+  it('CreateCustomerArgs requires email+username+name+address+phone', () => {
+    const valid = {
+      email: 'a@b.c',
+      username: 'usr',
+      name: { first_name: 'F', last_name: 'L' },
+      address: { street: 'St', number: '1', city: 'C', zipcode: 'Z', country: 'NL' },
+      phone: { country_code: '+1', area_code: '555', subscriber_number: '1234567' },
+    };
+    expect(CreateCustomerArgs.safeParse(valid).success).toBe(true);
+    // missing email
+    expect(CreateCustomerArgs.safeParse({ ...valid, email: undefined }).success).toBe(false);
+    // missing address.country
+    expect(
+      CreateCustomerArgs.safeParse({
+        ...valid,
+        address: { street: 'St', number: '1', city: 'C', zipcode: 'Z' },
+      }).success,
+    ).toBe(false);
+  });
+  it('CreateCustomerArgs rejects 3-letter country code', () => {
+    const base = {
+      email: 'a@b.c',
+      username: 'usr',
+      name: { first_name: 'F', last_name: 'L' },
+      phone: { country_code: '+1', area_code: '555', subscriber_number: '1234567' },
+    };
+    expect(
+      CreateCustomerArgs.safeParse({
+        ...base,
+        address: { street: 'St', number: '1', city: 'C', zipcode: 'Z', country: 'NLD' },
+      }).success,
+    ).toBe(false);
+  });
+  it('UpdateCustomerArgs accepts handle alone (partial update)', () => {
+    expect(UpdateCustomerArgs.safeParse({ handle: 'JD123-NL' }).success).toBe(true);
+    // handle is required even on update
+    expect(UpdateCustomerArgs.safeParse({}).success).toBe(false);
+  });
+  it('UpdateCustomerArgs accepts partial nested updates', () => {
+    expect(UpdateCustomerArgs.safeParse({ handle: 'JD123-NL', email: 'new@b.c' }).success).toBe(
+      true,
+    );
+    expect(
+      UpdateCustomerArgs.safeParse({ handle: 'JD123-NL', name: { first_name: 'X' } }).success,
+    ).toBe(true);
   });
 });

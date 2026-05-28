@@ -461,3 +461,77 @@ export type DecodeCsrArgs = z.infer<typeof DecodeCsrArgs>;
 // OTP token
 export const CreateSslOtpTokenArgs = z.object({ id: z.number().int().positive() });
 export type CreateSslOtpTokenArgs = z.infer<typeof CreateSslOtpTokenArgs>;
+
+// ---------------------------------------------------------------------------
+// Customer schemas — batch 5 (Phase enterprise)
+// ---------------------------------------------------------------------------
+
+const CustomerName = z.object({
+  first_name: z.string().min(1),
+  last_name: z.string().min(1),
+  full_name: z.string().optional(),
+  initials: z.string().optional(),
+  prefix: z.string().optional(),
+});
+const CustomerAddress = z.object({
+  street: z.string().min(1),
+  number: z.string().min(1),
+  city: z.string().min(1),
+  zipcode: z.string().min(1),
+  state: z.string().optional(),
+  country: z.string().min(2).max(2),
+  suffix: z.string().optional(),
+});
+const CustomerPhone = z.object({
+  country_code: z.string().min(1),
+  area_code: z.string().min(1),
+  subscriber_number: z.string().min(1),
+});
+const CustomerFax = z.object({
+  country_code: z.string().optional(),
+  area_code: z.string().optional(),
+  subscriber_number: z.string().optional(),
+});
+const CustomerTag = z.object({ key: z.string(), value: z.string() });
+const ExtensionAdditionalData = z.object({
+  name: z.string(),
+  data: z.record(z.string(), z.unknown()),
+});
+
+export const CustomerHandleArg = z.object({ handle: z.string().min(1) });
+export type CustomerHandleArg = z.infer<typeof CustomerHandleArg>;
+
+export const CreateCustomerArgs = z.object({
+  email: z.string().min(1),
+  username: z.string().min(1),
+  name: CustomerName,
+  address: CustomerAddress,
+  phone: CustomerPhone,
+  fax: CustomerFax.optional(),
+  tags: z.array(CustomerTag).optional(),
+  company_name: z.string().optional(),
+  comments: z.string().optional(),
+  locale: z.string().optional(),
+  vat: z.string().optional(),
+  additional_data: z.record(z.string(), z.unknown()).optional(),
+  extension_additional_data: z.array(ExtensionAdditionalData).optional(),
+});
+export type CreateCustomerArgs = z.infer<typeof CreateCustomerArgs>;
+
+// Update: handle (path) + partial body (everything else optional; username NOT updatable)
+export const UpdateCustomerArgs = z.object({
+  handle: z.string().min(1),
+  email: z.string().min(1).optional(),
+  name: CustomerName.partial().optional(),
+  address: CustomerAddress.partial().optional(),
+  phone: CustomerPhone.partial().optional(),
+  fax: CustomerFax.optional(),
+  tags: z.array(CustomerTag).optional(),
+  company_name: z.string().optional(),
+  comments: z.string().optional(),
+  locale: z.string().optional(),
+  vat: z.string().optional(),
+  additional_data: z.record(z.string(), z.unknown()).optional(),
+  extension_additional_data: z.array(ExtensionAdditionalData).optional(),
+});
+export type UpdateCustomerArgs = z.infer<typeof UpdateCustomerArgs>;
