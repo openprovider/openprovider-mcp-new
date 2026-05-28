@@ -338,3 +338,35 @@ export const CreateDomainTokenArgs = z.object({
   zone_provider: z.string().min(1),
 });
 export type CreateDomainTokenArgs = z.infer<typeof CreateDomainTokenArgs>;
+
+// ---------------------------------------------------------------------------
+// Catalog + tag schemas — batch 3 (Phase enterprise)
+// ---------------------------------------------------------------------------
+
+export const TldNameArg = z.object({ name: z.string().min(1) });
+export type TldNameArg = z.infer<typeof TldNameArg>;
+
+const DomainPriceOperation = z.enum(['create', 'transfer', 'restore', 'renew']);
+
+export const GetDomainPriceArgs = z.object({
+  domain: DomainRef,
+  operation: DomainPriceOperation,
+  additional_data: z
+    .object({
+      idn_script: z.string().optional(),
+    })
+    .optional(),
+});
+export type GetDomainPriceArgs = z.infer<typeof GetDomainPriceArgs>;
+
+export const CreateTagArgs = z.object({
+  key: z.string().min(1),
+  value: z.string().min(1),
+});
+export type CreateTagArgs = z.infer<typeof CreateTagArgs>;
+
+export const DeleteTagArgs = z.object({
+  key: z.string().min(1),
+  value: z.string().min(1),
+});
+export type DeleteTagArgs = z.infer<typeof DeleteTagArgs>;

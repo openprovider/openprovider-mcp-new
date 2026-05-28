@@ -25,6 +25,7 @@ import {
   CreateDomainTokenArgs,
   NoArgs,
 } from './types.js';
+import { TldNameArg, GetDomainPriceArgs, CreateTagArgs, DeleteTagArgs } from './types.js';
 
 describe('batch1 domain-lifecycle schemas', () => {
   it('DomainIdArg requires positive int id', () => {
@@ -170,5 +171,41 @@ describe('batch2 DNS schemas', () => {
       CreateDomainTokenArgs.safeParse({ domain: 'x.com', zone_provider: 'openprovider' }).success,
     ).toBe(true);
     expect(CreateDomainTokenArgs.safeParse({ domain: 'x.com' }).success).toBe(false);
+  });
+});
+
+describe('batch3 catalog+tags schemas', () => {
+  it('TldNameArg requires name', () => {
+    expect(TldNameArg.safeParse({ name: 'com' }).success).toBe(true);
+    expect(TldNameArg.safeParse({}).success).toBe(false);
+  });
+  it('GetDomainPriceArgs requires domain+operation; additional_data.idn_script optional', () => {
+    expect(
+      GetDomainPriceArgs.safeParse({ domain: { name: 'x', extension: 'com' }, operation: 'create' })
+        .success,
+    ).toBe(true);
+    expect(
+      GetDomainPriceArgs.safeParse({
+        domain: { name: 'x', extension: 'com' },
+        operation: 'renew',
+        additional_data: { idn_script: 'cyrl' },
+      }).success,
+    ).toBe(true);
+    expect(GetDomainPriceArgs.safeParse({ domain: { name: 'x', extension: 'com' } }).success).toBe(
+      false,
+    );
+    expect(
+      GetDomainPriceArgs.safeParse({ domain: { name: 'x', extension: 'com' }, operation: 'bogus' })
+        .success,
+    ).toBe(false);
+  });
+  it('CreateTagArgs requires key+value', () => {
+    expect(CreateTagArgs.safeParse({ key: 'customer', value: 'Tech' }).success).toBe(true);
+    expect(CreateTagArgs.safeParse({ key: 'customer' }).success).toBe(false);
+    expect(CreateTagArgs.safeParse({ value: 'Tech' }).success).toBe(false);
+  });
+  it('DeleteTagArgs requires key+value', () => {
+    expect(DeleteTagArgs.safeParse({ key: 'customer', value: 'Tech' }).success).toBe(true);
+    expect(DeleteTagArgs.safeParse({}).success).toBe(false);
   });
 });
