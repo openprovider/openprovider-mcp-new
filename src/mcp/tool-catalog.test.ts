@@ -47,6 +47,10 @@ describe('buildToolCatalog', () => {
         'update_ns_group',
         'create_dns_template',
         'create_domain_token',
+        'delete_dns_zone',
+        'delete_nameserver',
+        'delete_ns_group',
+        'delete_dns_template',
       ].sort(),
     );
     for (const t of cat) {
@@ -55,9 +59,9 @@ describe('buildToolCatalog', () => {
     }
   });
 
-  it('returns 40 tools', () => {
+  it('returns 44 tools', () => {
     const cat = buildToolCatalog();
-    expect(cat).toHaveLength(40);
+    expect(cat).toHaveLength(44);
   });
 
   it('catalog handler throws (never invoked — fast-path intercepts tools/call)', async () => {

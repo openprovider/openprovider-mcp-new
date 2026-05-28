@@ -43,6 +43,10 @@ import { createCreateNsGroupTool } from '../tools/create-ns-group.js';
 import { createUpdateNsGroupTool } from '../tools/update-ns-group.js';
 import { createCreateDnsTemplateTool } from '../tools/create-dns-template.js';
 import { createCreateDomainTokenTool } from '../tools/create-domain-token.js';
+import { createDeleteDnsZoneTool } from '../tools/delete-dns-zone.js';
+import { createDeleteNameserverTool } from '../tools/delete-nameserver.js';
+import { createDeleteNsGroupTool } from '../tools/delete-ns-group.js';
+import { createDeleteDnsTemplateTool } from '../tools/delete-dns-template.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -105,6 +109,10 @@ export function buildToolCatalog(): ToolEntry[] {
     createUpdateNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
     createCreateDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
     createCreateDomainTokenTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({

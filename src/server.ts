@@ -61,6 +61,10 @@ import { createCreateNsGroupTool } from './tools/create-ns-group.js';
 import { createUpdateNsGroupTool } from './tools/update-ns-group.js';
 import { createCreateDnsTemplateTool } from './tools/create-dns-template.js';
 import { createCreateDomainTokenTool } from './tools/create-domain-token.js';
+import { createDeleteDnsZoneTool } from './tools/delete-dns-zone.js';
+import { createDeleteNameserverTool } from './tools/delete-nameserver.js';
+import { createDeleteNsGroupTool } from './tools/delete-ns-group.js';
+import { createDeleteDnsTemplateTool } from './tools/delete-dns-template.js';
 import {
   claimConfirmation,
   unclaimConfirmation,
@@ -368,6 +372,10 @@ async function main(): Promise<void> {
         createUpdateNsGroupTool({ client: openproviderClient, tokenManager }),
         createCreateDnsTemplateTool({ client: openproviderClient, tokenManager }),
         createCreateDomainTokenTool({ client: openproviderClient, tokenManager }),
+        createDeleteDnsZoneTool({ client: openproviderClient, tokenManager }),
+        createDeleteNameserverTool({ client: openproviderClient, tokenManager }),
+        createDeleteNsGroupTool({ client: openproviderClient, tokenManager }),
+        createDeleteDnsTemplateTool({ client: openproviderClient, tokenManager }),
       ];
 
       // Path 2: confirm_pending's consume — validates AND executes the original tool.
