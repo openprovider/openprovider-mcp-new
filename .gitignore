@@ -31,5 +31,8 @@ coverage/
 
 # Local-only credential / collection material — never commit
 PostMan/
-.omc/state/
 .env.local
+
+# oh-my-claudecode runtime artifacts (orchestration state, never source)
+.omc/
+**/.omc/
