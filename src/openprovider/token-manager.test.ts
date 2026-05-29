@@ -80,4 +80,49 @@ describe('openprovider token manager', () => {
 
     await expect(mgr.getToken('tenant-bad')).rejects.toThrow(/invalid Openprovider credentials/);
   });
+
+  it('maps OP code 196 (HTTP 500 body) to OpenproviderAuthError', async () => {
+    const tm = createOpenproviderTokenManager({
+      fetchImpl: (() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ code: 196, desc: 'bad creds' }), { status: 500 }),
+        )) as typeof fetch,
+      fetchCredentials: () => Promise.resolve({ username: 'u', password: 'p' }),
+      cache: { get: () => Promise.resolve(null), set: () => {}, clear: () => {} },
+    });
+    await expect(tm.getToken('t1')).rejects.toMatchObject({ name: 'OpenproviderAuthError' });
+  });
+
+  it('maps OP code 196 returned with HTTP 200 to OpenproviderAuthError', async () => {
+    const tm = createOpenproviderTokenManager({
+      fetchImpl: (() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ code: 196 }), { status: 200 }),
+        )) as typeof fetch,
+      fetchCredentials: () => Promise.resolve({ username: 'u', password: 'p' }),
+      cache: { get: () => Promise.resolve(null), set: () => {}, clear: () => {} },
+    });
+    await expect(tm.getToken('t2')).rejects.toMatchObject({ name: 'OpenproviderAuthError' });
+  });
+
+  it('returns the token on a normal success body', async () => {
+    const tm = createOpenproviderTokenManager({
+      fetchImpl: (() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ code: 0, data: { token: 'TKN' } }), { status: 200 }),
+        )) as typeof fetch,
+      fetchCredentials: () => Promise.resolve({ username: 'u', password: 'p' }),
+      cache: { get: () => Promise.resolve(null), set: () => {}, clear: () => {} },
+    });
+    await expect(tm.getToken('t3')).resolves.toBe('TKN');
+  });
+
+  it('keeps the generic error for an unexpected non-196 failure', async () => {
+    const tm = createOpenproviderTokenManager({
+      fetchImpl: (() => Promise.resolve(new Response('', { status: 503 }))) as typeof fetch,
+      fetchCredentials: () => Promise.resolve({ username: 'u', password: 'p' }),
+      cache: { get: () => Promise.resolve(null), set: () => {}, clear: () => {} },
+    });
+    await expect(tm.getToken('t4')).rejects.toThrow('login failed: 503');
+  });
 });

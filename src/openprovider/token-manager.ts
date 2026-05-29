@@ -37,8 +37,16 @@ export function createOpenproviderTokenManager(
       body: JSON.stringify({ username: creds.username, password: creds.password }),
     });
     if (res.status === 401) throw new OpenproviderAuthError('invalid Openprovider credentials');
+    const body = (await res.json().catch(() => ({}))) as {
+      code?: number;
+      data?: { token?: string };
+    };
+    // Openprovider reports bad credentials as code 196, sometimes with a non-401 status
+    // (observed HTTP 500) or even a 200 envelope. Map it explicitly.
+    if (body.code === 196) {
+      throw new OpenproviderAuthError('invalid Openprovider credentials');
+    }
     if (!res.ok) throw new Error(`login failed: ${res.status}`);
-    const body = (await res.json()) as { data?: { token?: string } };
     const token = body.data?.token;
     if (!token) throw new Error('login response missing data.token');
     const expiresAt = new Date(Date.now() + (config.defaultTtlMs ?? DEFAULT_TTL));
