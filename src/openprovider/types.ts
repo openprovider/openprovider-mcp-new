@@ -9,7 +9,9 @@ export const CheckDomainArgs = z.object({
       }),
     )
     .min(1)
-    .max(50),
+    // Openprovider's /domains/check rejects batches >15 with a 500.
+    // Empirically: 15 OK, 20+ → upstream_500. Keep callers below the limit.
+    .max(15),
   with_price: z.boolean().default(true),
 });
 export type CheckDomainArgs = z.infer<typeof CheckDomainArgs>;
