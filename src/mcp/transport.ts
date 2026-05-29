@@ -43,10 +43,12 @@ export interface McpServerConfig {
    * directly; all other MCP methods (initialize, tools/list, SSE) continue through the SDK.
    */
   dispatchFactory?: DispatchFactory;
+  /** When true, Fastify honors X-Forwarded-* (set ONLY when behind a trusted proxy; otherwise clients can spoof XFF to evade per-IP rate limits). Default false. */
+  trustProxy?: boolean;
 }
 
 export async function createMcpServer(config: McpServerConfig): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, trustProxy: config.trustProxy ?? false });
 
   const resolve = createIdentityResolver({
     devToken: config.devToken,

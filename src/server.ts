@@ -537,6 +537,7 @@ async function main(): Promise<void> {
   const app = await createMcpServer({
     devToken: cfg.devBearerToken,
     devPrincipal,
+    trustProxy: cfg.trustProxy,
     apiKeyResolver,
     tools: buildToolCatalog(),
     dispatchFactory,
