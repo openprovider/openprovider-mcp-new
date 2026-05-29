@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type pg from 'pg';
+import pg from 'pg';
 import { startPostgres, type PgFixture } from '../_helpers/postgres-container.js';
 import { migratedDb, runAsTenant } from '../_helpers/db.js';
 import { GENESIS } from '../../../src/audit/chain.js';
@@ -18,10 +18,14 @@ async function insertEvent(c: pg.PoolClient, tenant: string, eventType: string) 
 describe('audit chain trigger', () => {
   let fixture: PgFixture;
   let pool: pg.Pool;
+  // Dedicated pool for the concurrent-insert test so its connections are
+  // never queued behind unrelated suite traffic (see: suite-contention flake).
+  let chainPool: pg.Pool;
   beforeAll(async () => {
     fixture = await startPostgres();
     const m = await migratedDb(fixture.url);
     pool = m.pool;
+    chainPool = new pg.Pool({ connectionString: fixture.url, max: 20 });
     const c = await pool.connect();
     try {
       await c.query(
@@ -33,6 +37,7 @@ describe('audit chain trigger', () => {
     }
   }, 60_000);
   afterAll(async () => {
+    await chainPool?.end();
     await pool.end();
     await fixture.stop();
   });
@@ -73,19 +78,24 @@ describe('audit chain trigger', () => {
     } finally {
       seed.release();
     }
+    // Use a dedicated pool (max: 20) so these 16 concurrent connections are
+    // never queued behind other test-suite traffic on the shared pool (max: 10).
+    // Concurrency raised to 16 to stress-test the per-tenant advisory lock.
     await Promise.all(
-      Array.from({ length: 8 }, (_, i) => runAsTenant(pool, T, (c) => insertEvent(c, T, `c${i}`))),
+      Array.from({ length: 16 }, (_, i) =>
+        runAsTenant(chainPool, T, (c) => insertEvent(c, T, `c${i}`)),
+      ),
     );
-    await runAsTenant(pool, T, async (c) => {
+    await runAsTenant(chainPool, T, async (c) => {
       const r = await c.query<{ prev_hash: Buffer; row_hash: Buffer }>(
-        `SELECT prev_hash, row_hash FROM audit_events WHERE tenant_id=$1 ORDER BY id`,
+        `SELECT prev_hash, row_hash FROM audit_events WHERE tenant_id=$1 ORDER BY chain_seq`,
         [T],
       );
-      expect(r.rows).toHaveLength(8);
+      expect(r.rows).toHaveLength(16);
       expect(r.rows[0]!.prev_hash.equals(GENESIS)).toBe(true);
       for (let i = 1; i < r.rows.length; i++) {
         expect(r.rows[i]!.prev_hash.equals(r.rows[i - 1]!.row_hash)).toBe(true);
       }
     });
-  }, 30_000);
+  }, 60_000);
 });
