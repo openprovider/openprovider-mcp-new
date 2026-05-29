@@ -269,7 +269,7 @@ async function main(): Promise<void> {
         }
         // Re-price using the stored tool name (not a caller-supplied name) + drift guard.
         const freshToken = await tokenManagerSafeToken(p.tenantId);
-        const fresh = await pricing.price(conf.toolName, args, freshToken);
+        const fresh = freshToken ? await pricing.price(conf.toolName, args, freshToken) : 0;
         if (fresh > Math.round(conf.estimatedCostCents * (1 + DRIFT_TOLERANCE))) {
           await settleConfirmation(client, conf.id, 'released');
           return { kind: 'error', code: 'price_changed' };
@@ -304,7 +304,7 @@ async function main(): Promise<void> {
           const policy = await getPolicy(client, p.tenantId);
           const live = await liveSpendCents(client, p.tenantId);
           const opToken = await tokenManagerSafeToken(p.tenantId);
-          const estimatedCostCents = await pricing.price(toolName, args, opToken);
+          const estimatedCostCents = opToken ? await pricing.price(toolName, args, opToken) : 0;
           const callerRole: Role =
             p.kind === 'user' ? p.role : p.scopes.includes('mcp:write') ? 'operator' : 'viewer';
           const decision = evaluate({
