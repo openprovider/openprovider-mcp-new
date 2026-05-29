@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking changes
+- **Pricing engine wired to spend-cap.** `renew_domain`, `transfer_domain`, `restore_domain`, `create_ssl_order`, `renew_ssl_order`, `reissue_ssl_order`, `create_plesk_license` now consume from the tenant's `spend_caps.limit_eur` (previously they were priced at 0 and bypassed the cap). Tenants whose cap was set under the prior behavior should raise it before performing these operations or confirmations will be denied with `decision: deny, reason: spend_cap_exceeded`. `trade_domain` remains confirm-without-spend (no public Openprovider price source is available for the trade operation).
+
+### Added
+- `src/policies/pricing/` directory with sub-pricers: `domain-check`, `domain-op`, `ssl-order`, `plesk-license`.
+- Env-gated live integration tests against the Openprovider sandbox: `live-domain-price`, `live-ssl-products`, `live-license-prices` (skipped unless `OPENPROVIDER_LIVE=1`).
+- Confirm-flow pricing integration test (`tests/integration/policies/pricing-confirm.test.ts`).
+
 ## [0.10.0-phase6c] — 2026-05-27
 
 ### Added
