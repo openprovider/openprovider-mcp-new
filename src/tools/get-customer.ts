@@ -2,6 +2,7 @@ import { CustomerHandleArg } from '../openprovider/types.js';
 import type { OpenproviderClient } from '../openprovider/client.js';
 import type { OpenproviderTokenManager } from '../openprovider/token-manager.js';
 import type { Principal } from '../auth/principal.js';
+import { redactContactPii } from '../openprovider/redact.js';
 
 export function createGetCustomerTool(deps: {
   client: OpenproviderClient;
@@ -14,7 +15,8 @@ export function createGetCustomerTool(deps: {
     handler: async (args: unknown, principal: Principal): Promise<unknown> => {
       const parsed = CustomerHandleArg.parse(args);
       const token = await deps.tokenManager.getToken(principal.tenantId);
-      return deps.client.getCustomer(token, parsed.handle);
+      const raw = await deps.client.getCustomer(token, parsed.handle);
+      return redactContactPii(raw);
     },
   };
 }
