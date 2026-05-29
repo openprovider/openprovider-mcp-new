@@ -18,7 +18,7 @@ export function createCheckDomainTool(deps: CheckDomainDeps): {
   return {
     name: 'check_domain',
     description:
-      'Check whether one or more domains are available for registration with Openprovider, optionally with prices.',
+      'Check whether one or more domains are available for registration with Openprovider, optionally with prices. Batch limit: up to 15 domains per call (Openprovider rejects larger batches with a 500). To check more, split into multiple calls of ≤15 each.',
     inputSchema: CheckDomainArgs,
     handler: async (args, principal) => {
       const parsed = CheckDomainArgs.parse(args);
