@@ -15,17 +15,13 @@ export interface EvaluateInput {
   tldsInArgs: string[];
 }
 
-const READ_TOOLS = new Set([
-  'check_domain',
-  'list_domains',
-  'get_domain',
-  'list_contacts',
-  'get_contact',
-  'list_pending_confirmations',
-]);
+const READ_TOOLS = new Set(['list_pending_confirmations']);
+
+const READ_PREFIXES = ['list_', 'get_', 'check_', 'suggest_'];
 
 export function isReadTool(toolName: string): boolean {
-  return READ_TOOLS.has(toolName);
+  if (READ_TOOLS.has(toolName)) return true;
+  return READ_PREFIXES.some((p) => toolName.startsWith(p));
 }
 
 /**
@@ -51,8 +47,7 @@ export function evaluate(input: EvaluateInput): Decision {
   if (mode === 'deny') return { decision: 'deny', reason: 'tool_not_permitted' };
 
   // Role gate: viewer may only run allow-mode read tools.
-  const isRead = READ_TOOLS.has(input.toolName);
-  if (input.role === 'viewer' && !(mode === 'allow' && isRead)) {
+  if (input.role === 'viewer' && !(mode === 'allow' && isReadTool(input.toolName))) {
     return { decision: 'deny', reason: 'insufficient_role' };
   }
 

@@ -15,6 +15,91 @@ import { createUpdateContactTool } from '../tools/update-contact.js';
 import { createDeleteContactTool } from '../tools/delete-contact.js';
 import { createListPendingConfirmationsTool } from '../tools/list-pending-confirmations.js';
 import { createConfirmPendingTool } from '../tools/confirm-pending.js';
+import { createSuggestDomainTool } from '../tools/suggest-domain.js';
+import { createGetDomainAuthcodeTool } from '../tools/get-domain-authcode.js';
+import { createResetDomainAuthcodeTool } from '../tools/reset-domain-authcode.js';
+import { createApproveDomainTransferTool } from '../tools/approve-domain-transfer.js';
+import { createSendFoa1DomainTransferTool } from '../tools/send-foa1-domain-transfer.js';
+import { createDeleteDomainTool } from '../tools/delete-domain.js';
+import { createRestartDomainOperationTool } from '../tools/restart-domain-operation.js';
+import { createRenewDomainTool } from '../tools/renew-domain.js';
+import { createTransferDomainTool } from '../tools/transfer-domain.js';
+import { createTradeDomainTool } from '../tools/trade-domain.js';
+import { createRestoreDomainTool } from '../tools/restore-domain.js';
+import { createListDnsZonesTool } from '../tools/list-dns-zones.js';
+import { createGetDnsZoneTool } from '../tools/get-dns-zone.js';
+import { createListDnsZoneRecordsTool } from '../tools/list-dns-zone-records.js';
+import { createListNameserversTool } from '../tools/list-nameservers.js';
+import { createGetNameserverTool } from '../tools/get-nameserver.js';
+import { createListNsGroupsTool } from '../tools/list-ns-groups.js';
+import { createGetNsGroupTool } from '../tools/get-ns-group.js';
+import { createListDnsTemplatesTool } from '../tools/list-dns-templates.js';
+import { createGetDnsTemplateTool } from '../tools/get-dns-template.js';
+import { createCreateDnsZoneTool } from '../tools/create-dns-zone.js';
+import { createUpdateDnsZoneTool } from '../tools/update-dns-zone.js';
+import { createCreateNameserverTool } from '../tools/create-nameserver.js';
+import { createUpdateNameserverTool } from '../tools/update-nameserver.js';
+import { createCreateNsGroupTool } from '../tools/create-ns-group.js';
+import { createUpdateNsGroupTool } from '../tools/update-ns-group.js';
+import { createCreateDnsTemplateTool } from '../tools/create-dns-template.js';
+import { createCreateDomainTokenTool } from '../tools/create-domain-token.js';
+import { createDeleteDnsZoneTool } from '../tools/delete-dns-zone.js';
+import { createDeleteNameserverTool } from '../tools/delete-nameserver.js';
+import { createDeleteNsGroupTool } from '../tools/delete-ns-group.js';
+import { createDeleteDnsTemplateTool } from '../tools/delete-dns-template.js';
+import { createListTldsTool } from '../tools/list-tlds.js';
+import { createGetTldTool } from '../tools/get-tld.js';
+import { createGetDomainPriceTool } from '../tools/get-domain-price.js';
+import { createListTagsTool } from '../tools/list-tags.js';
+import { createCreateTagTool } from '../tools/create-tag.js';
+import { createDeleteTagTool } from '../tools/delete-tag.js';
+import { createListSslProductsTool } from '../tools/list-ssl-products.js';
+import { createGetSslProductTool } from '../tools/get-ssl-product.js';
+import { createListSslOrdersTool } from '../tools/list-ssl-orders.js';
+import { createGetSslOrderTool } from '../tools/get-ssl-order.js';
+import { createGetSslApproverEmailsTool } from '../tools/get-ssl-approver-emails.js';
+import { createUpdateSslOrderTool } from '../tools/update-ssl-order.js';
+import { createUpdateSslApproverEmailTool } from '../tools/update-ssl-approver-email.js';
+import { createResendSslApproverEmailTool } from '../tools/resend-ssl-approver-email.js';
+import { createCreateCsrTool } from '../tools/create-csr.js';
+import { createDecodeCsrTool } from '../tools/decode-csr.js';
+import { createCreateSslOtpTokenTool } from '../tools/create-ssl-otp-token.js';
+import { createCreateSslOrderTool } from '../tools/create-ssl-order.js';
+import { createRenewSslOrderTool } from '../tools/renew-ssl-order.js';
+import { createReissueSslOrderTool } from '../tools/reissue-ssl-order.js';
+import { createCancelSslOrderTool } from '../tools/cancel-ssl-order.js';
+import { createListCustomersTool } from '../tools/list-customers.js';
+import { createGetCustomerTool } from '../tools/get-customer.js';
+import { createCreateCustomerTool } from '../tools/create-customer.js';
+import { createUpdateCustomerTool } from '../tools/update-customer.js';
+import { createDeleteCustomerTool } from '../tools/delete-customer.js';
+import { createListEmailTemplatesTool } from '../tools/list-email-templates.js';
+import { createCreateEmailTemplateTool } from '../tools/create-email-template.js';
+import { createUpdateEmailTemplateTool } from '../tools/update-email-template.js';
+import { createDeleteEmailTemplateTool } from '../tools/delete-email-template.js';
+import { createListEmailVerificationDomainsTool } from '../tools/list-email-verification-domains.js';
+import { createStartEmailVerificationTool } from '../tools/start-email-verification.js';
+import { createRestartEmailVerificationTool } from '../tools/restart-email-verification.js';
+import { createGetDmarcTool } from '../tools/get-dmarc.js';
+import { createListDmarcSubscriptionsTool } from '../tools/list-dmarc-subscriptions.js';
+import { createCreateDmarcTool } from '../tools/create-dmarc.js';
+import { createRetryDmarcTool } from '../tools/retry-dmarc.js';
+import { createDmarcSsoLoginTool } from '../tools/dmarc-sso-login.js';
+import { createDeleteDmarcTool } from '../tools/delete-dmarc.js';
+import { createGetSpamExpertsDomainTool } from '../tools/get-spam-experts-domain.js';
+import { createSpamExpertsLoginUrlTool } from '../tools/spam-experts-login-url.js';
+import { createCreateSpamExpertsDomainTool } from '../tools/create-spam-experts-domain.js';
+import { createUpdateSpamExpertsDomainTool } from '../tools/update-spam-experts-domain.js';
+import { createDeleteSpamExpertsDomainTool } from '../tools/delete-spam-experts-domain.js';
+import { createListLicensePricesTool } from '../tools/list-license-prices.js';
+import { createListLicenseItemsTool } from '../tools/list-license-items.js';
+import { createListPleskLicensesTool } from '../tools/list-plesk-licenses.js';
+import { createGetPleskLicenseTool } from '../tools/get-plesk-license.js';
+import { createGetPleskKeyTool } from '../tools/get-plesk-key.js';
+import { createCreatePleskLicenseTool } from '../tools/create-plesk-license.js';
+import { createUpdatePleskLicenseTool } from '../tools/update-plesk-license.js';
+import { createResetPleskHwidTool } from '../tools/reset-plesk-hwid.js';
+import { createDeletePleskLicenseTool } from '../tools/delete-plesk-license.js';
 
 /**
  * Static tool catalog for tools/list. Built by instantiating each tool factory
@@ -49,6 +134,91 @@ export function buildToolCatalog(): ToolEntry[] {
       consume: () =>
         Promise.reject(new Error('catalog entry is list-only; dispatched via fast-path')),
     }),
+    createSuggestDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDomainAuthcodeTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createResetDomainAuthcodeTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createApproveDomainTransferTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createSendFoa1DomainTransferTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRestartDomainOperationTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRenewDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createTransferDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createTradeDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRestoreDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDnsZonesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDnsZoneRecordsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListNameserversTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListNsGroupsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDnsTemplatesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDomainTokenTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDnsZoneTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteNameserverTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteNsGroupTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDnsTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListTldsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetTldTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDomainPriceTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListTagsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateTagTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteTagTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListSslProductsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetSslProductTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListSslOrdersTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetSslApproverEmailsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateSslApproverEmailTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createResendSslApproverEmailTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateCsrTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDecodeCsrTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateSslOtpTokenTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRenewSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createReissueSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCancelSslOrderTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListCustomersTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteCustomerTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListEmailTemplatesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateEmailTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateEmailTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteEmailTemplateTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListEmailVerificationDomainsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createStartEmailVerificationTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRestartEmailVerificationTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListDmarcSubscriptionsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createRetryDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDmarcSsoLoginTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteDmarcTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createSpamExpertsLoginUrlTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreateSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdateSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeleteSpamExpertsDomainTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListLicensePricesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListLicenseItemsTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createListPleskLicensesTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetPleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createGetPleskKeyTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createCreatePleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createUpdatePleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createResetPleskHwidTool({ client: stubClient, tokenManager: stubTokenManager }),
+    createDeletePleskLicenseTool({ client: stubClient, tokenManager: stubTokenManager }),
   ];
 
   return tools.map((t) => ({

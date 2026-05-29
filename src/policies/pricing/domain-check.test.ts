@@ -1,31 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createPricing, DRIFT_TOLERANCE } from './pricing.js';
+import { describe, expect, it } from 'vitest';
+import { createPricing, DRIFT_TOLERANCE } from './index.js';
+import { clientWith } from './__fixtures/op-client.js';
 
-function clientWith(price: { price: number; currency: string } | undefined, isPremium = false) {
-  return {
-    checkDomain: vi.fn().mockResolvedValue({
-      results: [
-        {
-          domain: 'x.com',
-          status: 'free',
-          is_premium: isPremium,
-          price: price ? { product: price } : undefined,
-        },
-      ],
-    }),
-    listDomains: vi.fn(),
-    getDomain: vi.fn(),
-    listContacts: vi.fn(),
-    getContact: vi.fn(),
-    registerDomain: vi.fn(),
-    updateDomain: vi.fn(),
-    createContact: vi.fn(),
-    updateContact: vi.fn(),
-    deleteContact: vi.fn(),
-  };
-}
-
-describe('pricing', () => {
+describe('pricing — domain-check (register/update)', () => {
   it('prices register_domain in cents from check_domain', async () => {
     const client = clientWith({ price: 12.99, currency: 'EUR' });
     const pricing = createPricing({ client });

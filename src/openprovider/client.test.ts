@@ -149,3 +149,975 @@ describe('openprovider client — read endpoints', () => {
     await expect(client.getDomain('tok', 999)).rejects.toBeInstanceOf(OpenproviderClientError);
   });
 });
+
+describe('openprovider client — domain lifecycle methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('suggestDomain POSTs /domains/suggest-name and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/suggest-name`)
+      .reply(200, { data: { results: [] } });
+    const client = createOpenproviderClient();
+    expect(await client.suggestDomain('tok', { name: 'example' })).toEqual({ results: [] });
+  });
+
+  it('getDomainAuthcode GETs /domains/:id/authcode and unwraps data', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/domains/42/authcode`)
+      .reply(200, { data: { auth_code: 'ZZ' } });
+    const client = createOpenproviderClient();
+    expect(await client.getDomainAuthcode('tok', 42)).toEqual({ auth_code: 'ZZ' });
+  });
+
+  it('resetDomainAuthcode POSTs /domains/:id/authcode/reset and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/authcode/reset`, (b: Record<string, unknown>) => b['id'] === 42)
+      .reply(200, { data: { auth_code: 'NEW' } });
+    const client = createOpenproviderClient();
+    expect(await client.resetDomainAuthcode('tok', { id: 42 })).toEqual({ auth_code: 'NEW' });
+  });
+
+  it('approveDomainTransfer POSTs /domains/:id/transfer/approve and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/transfer/approve`, (b: Record<string, unknown>) => b['id'] === 42)
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.approveDomainTransfer('tok', { id: 42 })).toEqual({ success: true });
+  });
+
+  it('sendFoa1DomainTransfer POSTs /domains/:id/transfer/send-foa1 and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/transfer/send-foa1`)
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.sendFoa1DomainTransfer('tok', 42)).toEqual({ success: true });
+  });
+
+  it('deleteDomain DELETEs /domains/:id and unwraps data', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/domains/42`)
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.deleteDomain('tok', 42)).toEqual({ success: true });
+  });
+
+  it('restartDomainOperation POSTs /domains/:id/last-operation/restart and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/42/last-operation/restart`,
+        (b: Record<string, unknown>) => b['id'] === 42,
+      )
+      .reply(200, { data: { success: true } });
+    const client = createOpenproviderClient();
+    expect(await client.restartDomainOperation('tok', { id: 42 })).toEqual({ success: true });
+  });
+
+  it('renewDomain POSTs /domains/:id/renew and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/42/renew`,
+        (b: Record<string, unknown>) => b['id'] === 42 && b['period'] === 1,
+      )
+      .reply(200, { data: { id: 42 } });
+    const client = createOpenproviderClient();
+    expect(await client.renewDomain('tok', { id: 42, period: 1 })).toEqual({ id: 42 });
+  });
+
+  it('transferDomain POSTs /domains/transfer and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/transfer`,
+        (b: Record<string, unknown>) =>
+          (b['domain'] as Record<string, unknown>)['name'] === 'example' &&
+          b['auth_code'] === 'ABC',
+      )
+      .reply(200, { data: { id: 99 } });
+    const client = createOpenproviderClient();
+    expect(
+      await client.transferDomain('tok', {
+        domain: { name: 'example', extension: 'com' },
+        auth_code: 'ABC',
+        owner_handle: 'H1',
+      }),
+    ).toEqual({ id: 99 });
+  });
+
+  it('tradeDomain POSTs /domains/trade and unwraps data', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/domains/trade`,
+        (b: Record<string, unknown>) =>
+          (b['domain'] as Record<string, unknown>)['name'] === 'example' &&
+          b['auth_code'] === 'XYZ',
+      )
+      .reply(200, { data: { id: 55 } });
+    const client = createOpenproviderClient();
+    expect(
+      await client.tradeDomain('tok', {
+        domain: { name: 'example', extension: 'com' },
+        auth_code: 'XYZ',
+        owner_handle: 'H2',
+      }),
+    ).toEqual({ id: 55 });
+  });
+
+  it('restoreDomain POSTs /domains/:id/restore and unwraps data', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/domains/42/restore`, (b: Record<string, unknown>) => b['id'] === 42)
+      .reply(200, { data: { id: 42 } });
+    const client = createOpenproviderClient();
+    expect(await client.restoreDomain('tok', { id: 42 })).toEqual({ id: 42 });
+  });
+});
+
+describe('openprovider client — DNS methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  // --- reads ---
+
+  it('listDnsZones GETs /dns/zones', async () => {
+    nock(BASE).get(`${PREFIX}/dns/zones`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listDnsZones('tok')).toEqual([]);
+  });
+
+  it('getDnsZone GETs /dns/zones/:name (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/zones/example.com`)
+      .reply(200, { data: { name: 'example.com' } });
+    expect(await createOpenproviderClient().getDnsZone('tok', 'example.com')).toEqual({
+      name: 'example.com',
+    });
+  });
+
+  it('listDnsZoneRecords GETs /dns/zones/:name/records', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/zones/example.com/records`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listDnsZoneRecords('tok', 'example.com')).toEqual({
+      results: [],
+    });
+  });
+
+  it('listNameservers GETs /dns/nameservers', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listNameservers('tok')).toEqual({ results: [] });
+  });
+
+  it('getNameserver GETs /dns/nameservers/:name (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers/ns1.example.com`)
+      .reply(200, { data: { name: 'ns1.example.com' } });
+    expect(await createOpenproviderClient().getNameserver('tok', 'ns1.example.com')).toEqual({
+      name: 'ns1.example.com',
+    });
+  });
+
+  it('listNsGroups GETs /dns/nameservers/groups', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers/groups`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listNsGroups('tok')).toEqual({ results: [] });
+  });
+
+  it('getNsGroup GETs /dns/nameservers/groups/:nsGroup (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/nameservers/groups/my-group`)
+      .reply(200, { data: { ns_group: 'my-group' } });
+    expect(await createOpenproviderClient().getNsGroup('tok', 'my-group')).toEqual({
+      ns_group: 'my-group',
+    });
+  });
+
+  it('listDnsTemplates GETs /dns/templates', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/templates`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listDnsTemplates('tok')).toEqual({ results: [] });
+  });
+
+  it('getDnsTemplate GETs /dns/templates/:id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/dns/templates/7`)
+      .reply(200, { data: { id: 7 } });
+    expect(await createOpenproviderClient().getDnsTemplate('tok', 7)).toEqual({ id: 7 });
+  });
+
+  // --- writes ---
+
+  it('createDnsZone POSTs /dns/zones with flat records', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/dns/zones`, (b: Record<string, unknown>) => Array.isArray(b['records']))
+      .reply(200, { data: { id: 1 } });
+    expect(
+      await createOpenproviderClient().createDnsZone('tok', {
+        domain: { name: 'x', extension: 'com' },
+        provider: 'openprovider',
+        type: 'master',
+        records: [{ type: 'A', value: '1.2.3.4', ttl: 3600 }],
+      }),
+    ).toEqual({ id: 1 });
+  });
+
+  it('updateDnsZone PUTs /dns/zones/:name derived from domain', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/dns/zones/x.com`,
+        (b: Record<string, unknown>) =>
+          typeof b['records'] === 'object' && !Array.isArray(b['records']),
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateDnsZone('tok', {
+        domain: { name: 'x', extension: 'com' },
+        records: { add: [{ type: 'A', value: '1.2.3.4', ttl: 3600 }] },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('createNameserver POSTs /dns/nameservers with name+ip in body', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/dns/nameservers`,
+        (b: Record<string, unknown>) =>
+          typeof b['name'] === 'string' && typeof b['ip'] === 'string',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createNameserver('tok', {
+        name: 'ns1.x.com',
+        ip: '1.2.3.4',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('updateNameserver PUTs /dns/nameservers/:name with ip in body', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/dns/nameservers/ns1.x.com`,
+        (b: Record<string, unknown>) => typeof b['ip'] === 'string',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateNameserver('tok', {
+        name: 'ns1.x.com',
+        ip: '5.6.7.8',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('createNsGroup POSTs /dns/nameservers/groups', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/dns/nameservers/groups`,
+        (b: Record<string, unknown>) => typeof b['ns_group'] === 'string',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createNsGroup('tok', {
+        ns_group: 'G',
+        name_servers: [{ name: 'ns1.x.com', ip: '1.2.3.4', seq_nr: 0 }],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('updateNsGroup PUTs /dns/nameservers/groups/:nsGroup with name_servers in body', async () => {
+    nock(BASE)
+      .put(`${PREFIX}/dns/nameservers/groups/G`, (b: Record<string, unknown>) =>
+        Array.isArray(b['name_servers']),
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateNsGroup('tok', {
+        ns_group: 'G',
+        name_servers: [{ name: 'ns1.x.com', ip: '1.2.3.4', seq_nr: 0 }],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('createDnsTemplate POSTs /dns/templates with name in body', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/dns/templates`,
+        (b: Record<string, unknown>) => typeof b['name'] === 'string',
+      )
+      .reply(200, { data: { id: 5 } });
+    expect(
+      await createOpenproviderClient().createDnsTemplate('tok', { name: 'my-template' }),
+    ).toEqual({ id: 5 });
+  });
+
+  it('createDomainToken POSTs /dns/domain-token', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/dns/domain-token`, (b: Record<string, unknown>) => b['domain'] === 'x.com')
+      .reply(200, { data: { token: 't' } });
+    expect(
+      await createOpenproviderClient().createDomainToken('tok', {
+        domain: 'x.com',
+        zone_provider: 'openprovider',
+      }),
+    ).toEqual({ token: 't' });
+  });
+
+  // --- deletes ---
+
+  it('deleteDnsZone DELETEs /dns/zones/:name', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/zones/x.com`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteDnsZone('tok', 'x.com')).toEqual({ ok: true });
+  });
+
+  it('deleteNameserver DELETEs /dns/nameservers/:name', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/nameservers/ns1.x.com`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteNameserver('tok', 'ns1.x.com')).toEqual({
+      ok: true,
+    });
+  });
+
+  it('deleteNsGroup DELETEs /dns/nameservers/groups/:nsGroup', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/nameservers/groups/G`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteNsGroup('tok', 'G')).toEqual({ ok: true });
+  });
+
+  it('deleteDnsTemplate DELETEs /dns/templates/:id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/dns/templates/7`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteDnsTemplate('tok', 7)).toEqual({ ok: true });
+  });
+});
+
+describe('openprovider client — SSL methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  // --- reads ---
+
+  it('listSslProducts GETs /ssl/products', async () => {
+    nock(BASE).get(`${PREFIX}/ssl/products`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listSslProducts('tok')).toEqual([]);
+  });
+
+  it('getSslProduct GETs /ssl/products/:id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/products/123`)
+      .reply(200, { data: { id: 123 } });
+    expect(await createOpenproviderClient().getSslProduct('tok', 123)).toEqual({ id: 123 });
+  });
+
+  it('listSslOrders GETs /ssl/orders', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/orders`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listSslOrders('tok')).toEqual({ results: [] });
+  });
+
+  it('getSslOrder GETs /ssl/orders/:id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/orders/42`)
+      .reply(200, { data: { id: 42 } });
+    expect(await createOpenproviderClient().getSslOrder('tok', 42)).toEqual({ id: 42 });
+  });
+
+  it('getSslApproverEmails GETs /ssl/approver-emails with domain query', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/ssl/approver-emails`)
+      .query({ domain: 'x.com' })
+      .reply(200, { data: [] });
+    expect(
+      await createOpenproviderClient().getSslApproverEmails('tok', { domain: 'x.com' }),
+    ).toEqual([]);
+  });
+
+  // --- writes ---
+
+  it('createSslOrder POSTs /ssl/orders with the full order body', async () => {
+    const body = {
+      approver_email: 'a@b.c',
+      autorenew: 'on' as const,
+      csr: 'PEM',
+      domain_amount: 1,
+      domain_validation_methods: [{ host_name: 'x.com', method: 'dns' as const }],
+      enable_dns_automation: false,
+      host_names: ['x.com'],
+      organization_handle: 'OH',
+      period: 1,
+      product_id: 1,
+      signature_hash_algorithm: 'sha2',
+      software_id: 'linux',
+      start_provision: true,
+      technical_handle: 'TH',
+      wildcard_domain_amount: 0,
+    };
+    nock(BASE)
+      .post(
+        `${PREFIX}/ssl/orders`,
+        (b: Record<string, unknown>) => b['product_id'] === 1 && Array.isArray(b['host_names']),
+      )
+      .reply(200, { data: { id: 5 } });
+    expect(await createOpenproviderClient().createSslOrder('tok', body)).toEqual({ id: 5 });
+  });
+
+  it('renewSslOrder POSTs /ssl/orders/:id/renew with id derived from args', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/orders/7/renew`, (b: Record<string, unknown>) => b['id'] === 7)
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().renewSslOrder('tok', {
+        id: 7,
+        enable_dns_automation: false,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('cancelSslOrder POSTs /ssl/orders/:id/cancel', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/orders/9/cancel`, (b: Record<string, unknown>) => b['id'] === 9)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().cancelSslOrder('tok', { id: 9 })).toEqual({ ok: true });
+  });
+
+  it('updateSslOrder PUTs /ssl/orders/:id with body', async () => {
+    const body = {
+      id: 3,
+      approver_email: 'a@b.c',
+      autorenew: 'off' as const,
+      csr: 'PEM',
+      domain_amount: 1,
+      domain_validation_methods: [{ host_name: 'x.com', method: 'dns' as const }],
+      enable_dns_automation: false,
+      host_names: ['x.com'],
+      organization_handle: 'OH',
+      period: 1,
+      product_id: 1,
+      signature_hash_algorithm: 'sha2',
+      software_id: 'linux',
+      start_provision: true,
+      technical_handle: 'TH',
+      wildcard_domain_amount: 0,
+    };
+    nock(BASE)
+      .put(`${PREFIX}/ssl/orders/3`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().updateSslOrder('tok', body)).toEqual({ ok: true });
+  });
+
+  it('updateSslApproverEmail PUTs /ssl/orders/:id/approver-email', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/ssl/orders/5/approver-email`,
+        (b: Record<string, unknown>) => b['approver_email'] === 'a@b.c',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateSslApproverEmail('tok', {
+        id: 5,
+        approver_email: 'a@b.c',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('resendSslApproverEmail POSTs /ssl/orders/:id/approver-email/resend', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/ssl/orders/6/approver-email/resend`,
+        (b: Record<string, unknown>) => b['id'] === 6,
+      )
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().resendSslApproverEmail('tok', { id: 6 })).toEqual({
+      ok: true,
+    });
+  });
+
+  it('createCsr POSTs /ssl/csr', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/csr`, (b: Record<string, unknown>) => b['common_name'] === 'x.com')
+      .reply(200, { data: { csr: 'PEM' } });
+    expect(
+      await createOpenproviderClient().createCsr('tok', {
+        bits: 2048,
+        common_name: 'x.com',
+        country: 'NL',
+        email: 'a@b.c',
+        locality: 'Amsterdam',
+        organization: 'X',
+        signature_hash_algorithm: 'sha2',
+        state: 'NH',
+      }),
+    ).toEqual({ csr: 'PEM' });
+  });
+
+  it('decodeCsr POSTs /ssl/csr/decode', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/csr/decode`, (b: Record<string, unknown>) => b['csr'] === 'PEM')
+      .reply(200, { data: { common_name: 'x.com' } });
+    expect(await createOpenproviderClient().decodeCsr('tok', { csr: 'PEM' })).toEqual({
+      common_name: 'x.com',
+    });
+  });
+
+  it('createSslOtpToken POSTs /ssl/orders/:id/otp-tokens', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/ssl/orders/4/otp-tokens`, (b: Record<string, unknown>) => b['id'] === 4)
+      .reply(200, { data: { token: 't' } });
+    expect(await createOpenproviderClient().createSslOtpToken('tok', { id: 4 })).toEqual({
+      token: 't',
+    });
+  });
+
+  it('reissueSslOrder POSTs /ssl/orders/:id/reissue with full body', async () => {
+    const body = {
+      id: 8,
+      approver_email: 'a@b.c',
+      autorenew: 'on' as const,
+      csr: 'PEM',
+      domain_amount: 1,
+      domain_validation_methods: [{ host_name: 'x.com', method: 'dns' as const }],
+      enable_dns_automation: false,
+      host_names: ['x.com'],
+      organization_handle: 'OH',
+      period: 1,
+      product_id: 1,
+      signature_hash_algorithm: 'sha2',
+      software_id: 'linux',
+      start_provision: true,
+      technical_handle: 'TH',
+      wildcard_domain_amount: 0,
+    };
+    nock(BASE)
+      .post(
+        `${PREFIX}/ssl/orders/8/reissue`,
+        (b: Record<string, unknown>) => b['id'] === 8 && b['product_id'] === 1,
+      )
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().reissueSslOrder('tok', body)).toEqual({ ok: true });
+  });
+});
+
+describe('openprovider client — catalog + tag methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listTlds GETs /tlds', async () => {
+    nock(BASE).get(`${PREFIX}/tlds`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listTlds('tok')).toEqual([]);
+  });
+
+  it('getTld GETs /tlds/:name (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/tlds/co.uk`)
+      .reply(200, { data: { name: 'co.uk' } });
+    expect(await createOpenproviderClient().getTld('tok', 'co.uk')).toEqual({ name: 'co.uk' });
+  });
+
+  it('getDomainPrice GETs /domains/prices with dot-notation query', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/domains/prices`)
+      .query({ 'domain.name': 'x', 'domain.extension': 'com', operation: 'create' })
+      .reply(200, { data: { price: { product: { price: 9.99 } } } });
+    expect(
+      await createOpenproviderClient().getDomainPrice('tok', {
+        domain: { name: 'x', extension: 'com' },
+        operation: 'create',
+      }),
+    ).toEqual({ price: { product: { price: 9.99 } } });
+  });
+
+  it('getDomainPrice includes idn_script when provided', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/domains/prices`)
+      .query({
+        'domain.name': 'x',
+        'domain.extension': 'com',
+        operation: 'create',
+        'additional_data.idn_script': 'cyrl',
+      })
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().getDomainPrice('tok', {
+        domain: { name: 'x', extension: 'com' },
+        operation: 'create',
+        additional_data: { idn_script: 'cyrl' },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('listTags GETs /tags', async () => {
+    nock(BASE).get(`${PREFIX}/tags`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listTags('tok')).toEqual([]);
+  });
+
+  it('createTag POSTs /tags with {key,value}', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/tags`,
+        (b: Record<string, unknown>) => b['key'] === 'customer' && b['value'] === 'Tech',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createTag('tok', { key: 'customer', value: 'Tech' }),
+    ).toEqual({ ok: true });
+  });
+
+  it('deleteTag DELETEs /tags?key=...&value=...', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/tags`)
+      .query({ key: 'customer', value: 'Tech' })
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().deleteTag('tok', { key: 'customer', value: 'Tech' }),
+    ).toEqual({ ok: true });
+  });
+});
+
+describe('openprovider client — customer methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listCustomers GETs /customers', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/customers`)
+      .reply(200, { data: { results: [] } });
+    expect(await createOpenproviderClient().listCustomers('tok')).toEqual({ results: [] });
+  });
+
+  it('getCustomer GETs /customers/:handle (encoded)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/customers/JD123-NL`)
+      .reply(200, { data: { handle: 'JD123-NL' } });
+    expect(await createOpenproviderClient().getCustomer('tok', 'JD123-NL')).toEqual({
+      handle: 'JD123-NL',
+    });
+  });
+
+  it('createCustomer POSTs /customers with required body', async () => {
+    const valid = {
+      email: 'a@b.c',
+      username: 'usr',
+      name: { first_name: 'F', last_name: 'L' },
+      address: { street: 'St', number: '1', city: 'C', zipcode: 'Z', country: 'NL' },
+      phone: { country_code: '+1', area_code: '555', subscriber_number: '1234567' },
+    };
+    nock(BASE)
+      .post(
+        `${PREFIX}/customers`,
+        (b: Record<string, unknown>) => b['email'] === 'a@b.c' && b['username'] === 'usr',
+      )
+      .reply(200, { data: { handle: 'JD123-NL' } });
+    expect(await createOpenproviderClient().createCustomer('tok', valid)).toEqual({
+      handle: 'JD123-NL',
+    });
+  });
+
+  it('updateCustomer PUTs /customers/:handle derived from args', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/customers/JD123-NL`,
+        (b: Record<string, unknown>) => b['handle'] === 'JD123-NL',
+      )
+      .reply(200, { data: { handle: 'JD123-NL' } });
+    expect(
+      await createOpenproviderClient().updateCustomer('tok', {
+        handle: 'JD123-NL',
+        email: 'new@b.c',
+      }),
+    ).toEqual({ handle: 'JD123-NL' });
+  });
+
+  it('deleteCustomer DELETEs /customers/:handle', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/customers/JD123-NL`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteCustomer('tok', 'JD123-NL')).toEqual({
+      ok: true,
+    });
+  });
+});
+
+describe('openprovider client — email, DMARC, and SpamExperts methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listEmailTemplates GETs /emails', async () => {
+    nock(BASE).get(`${PREFIX}/emails`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listEmailTemplates('tok')).toEqual([]);
+  });
+
+  it('createEmailTemplate POSTs /emails with required body', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/emails`,
+        (b: Record<string, unknown>) => b['group'] === 'ive' && b['name'] === 'tpl',
+      )
+      .reply(200, { data: { id: 1 } });
+    expect(
+      await createOpenproviderClient().createEmailTemplate('tok', { group: 'ive', name: 'tpl' }),
+    ).toEqual({ id: 1 });
+  });
+
+  it('updateEmailTemplate PUTs /emails/:id derived from args', async () => {
+    nock(BASE)
+      .put(`${PREFIX}/emails/5`, (b: Record<string, unknown>) => b['id'] === 5)
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateEmailTemplate('tok', {
+        id: 5,
+        group: 'ive',
+        name: 'tpl',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('deleteEmailTemplate DELETEs /emails/:id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/emails/5`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteEmailTemplate('tok', 5)).toEqual({ ok: true });
+  });
+
+  it('listEmailVerificationDomains GETs /customers/verifications/emails/domains', async () => {
+    nock(BASE).get(`${PREFIX}/customers/verifications/emails/domains`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listEmailVerificationDomains('tok')).toEqual([]);
+  });
+
+  it('startEmailVerification POSTs the start endpoint', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/customers/verifications/emails/start`,
+        (b: Record<string, unknown>) => b['email'] === 'a@b.c' && b['handle'] === 'JD-NL',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().startEmailVerification('tok', {
+        email: 'a@b.c',
+        handle: 'JD-NL',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('restartEmailVerification POSTs the restart endpoint', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/customers/verifications/emails/restart`,
+        (b: Record<string, unknown>) => b['email'] === 'a@b.c',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().restartEmailVerification('tok', {
+        email: 'a@b.c',
+        handle: 'JD-NL',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('getDmarc GETs /easydmarcs with dot-notation domain query', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/easydmarcs`)
+      .query({ 'domain.name': 'x', 'domain.extension': 'com' })
+      .reply(200, { data: { id: 1 } });
+    expect(
+      await createOpenproviderClient().getDmarc('tok', { domain: { name: 'x', extension: 'com' } }),
+    ).toEqual({ id: 1 });
+  });
+
+  it('listDmarcSubscriptions GETs /easydmarcs/list', async () => {
+    nock(BASE).get(`${PREFIX}/easydmarcs/list`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listDmarcSubscriptions('tok')).toEqual([]);
+  });
+
+  it('createDmarc POSTs /easydmarcs', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/easydmarcs`, (b: Record<string, unknown>) => b['owner_handle'] === 'OH')
+      .reply(200, { data: { id: 7 } });
+    expect(
+      await createOpenproviderClient().createDmarc('tok', {
+        domain: { name: 'x', extension: 'com' },
+        owner_handle: 'OH',
+      }),
+    ).toEqual({ id: 7 });
+  });
+
+  it('retryDmarc POSTs /easydmarcs/:id/retry', async () => {
+    nock(BASE)
+      .post(`${PREFIX}/easydmarcs/7/retry`, (b: Record<string, unknown>) => b['id'] === 7)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().retryDmarc('tok', { id: 7 })).toEqual({ ok: true });
+  });
+
+  it('dmarcSsoLogin GETs /easydmarcs/:id/sso', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/easydmarcs/7/sso`)
+      .reply(200, { data: { url: 'https://...' } });
+    expect(await createOpenproviderClient().dmarcSsoLogin('tok', { id: 7 })).toEqual({
+      url: 'https://...',
+    });
+  });
+
+  it('deleteDmarc DELETEs /easydmarcs/:id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/easydmarcs/7`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteDmarc('tok', 7)).toEqual({ ok: true });
+  });
+
+  it('getSpamExpertsDomain GETs /spam-expert/domains/:name', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/spam-expert/domains/x.com`)
+      .reply(200, { data: { domain_name: 'x.com' } });
+    expect(await createOpenproviderClient().getSpamExpertsDomain('tok', 'x.com')).toEqual({
+      domain_name: 'x.com',
+    });
+  });
+
+  it('spamExpertsLoginUrl POSTs /spam-expert/generate-login-url', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/spam-expert/generate-login-url`,
+        (b: Record<string, unknown>) => b['domain_or_email'] === 'a@b.c',
+      )
+      .reply(200, { data: { url: 'https://...' } });
+    expect(
+      await createOpenproviderClient().spamExpertsLoginUrl('tok', {
+        bundle: false,
+        domain_or_email: 'a@b.c',
+      }),
+    ).toEqual({ url: 'https://...' });
+  });
+
+  it('createSpamExpertsDomain POSTs /spam-expert/domains', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/spam-expert/domains`,
+        (b: Record<string, unknown>) => b['domain_name'] === 'x.com',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().createSpamExpertsDomain('tok', {
+        bundle: false,
+        destinations: [{ hostname: 'h', port: 25 }],
+        domain_name: 'x.com',
+        products: { archiving: false, incoming: true, outgoing: false },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('updateSpamExpertsDomain PUTs /spam-expert/domains/:name', async () => {
+    nock(BASE)
+      .put(
+        `${PREFIX}/spam-expert/domains/x.com`,
+        (b: Record<string, unknown>) => b['domain_name'] === 'x.com',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().updateSpamExpertsDomain('tok', {
+        domain_name: 'x.com',
+        bundle: false,
+        destinations: [{ hostname: 'h', port: 25 }],
+        products: { archiving: false, incoming: true, outgoing: false },
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('deleteSpamExpertsDomain DELETEs /spam-expert/domains/:name', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/spam-expert/domains/x.com`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deleteSpamExpertsDomain('tok', 'x.com')).toEqual({
+      ok: true,
+    });
+  });
+});
+
+describe('openprovider client — license methods', () => {
+  const BASE = 'https://api.openprovider.eu';
+  const PREFIX = '/v1beta';
+
+  afterEach(() => nock.cleanAll());
+
+  it('listLicensePrices GETs /licenses', async () => {
+    nock(BASE).get(`${PREFIX}/licenses`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listLicensePrices('tok')).toEqual([]);
+  });
+  it('listLicenseItems GETs /licenses/items', async () => {
+    nock(BASE).get(`${PREFIX}/licenses/items`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listLicenseItems('tok')).toEqual([]);
+  });
+  it('listPleskLicenses GETs /licenses/plesk', async () => {
+    nock(BASE).get(`${PREFIX}/licenses/plesk`).reply(200, { data: [] });
+    expect(await createOpenproviderClient().listPleskLicenses('tok')).toEqual([]);
+  });
+  it('getPleskLicense GETs /licenses/plesk/:key_id', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/licenses/plesk/7`)
+      .reply(200, { data: { key_id: 7 } });
+    expect(await createOpenproviderClient().getPleskLicense('tok', 7)).toEqual({ key_id: 7 });
+  });
+  it('getPleskKey GETs /licenses/plesk/key/:key_id (literal key before id)', async () => {
+    nock(BASE)
+      .get(`${PREFIX}/licenses/plesk/key/7`)
+      .reply(200, { data: { key: 'XX' } });
+    expect(await createOpenproviderClient().getPleskKey('tok', 7)).toEqual({ key: 'XX' });
+  });
+  it('createPleskLicense POSTs /licenses/plesk', async () => {
+    const valid = { items: ['SKU'], period: 1, ip_address_binding: '127.0.0.1', title: 'T' };
+    nock(BASE)
+      .post(
+        `${PREFIX}/licenses/plesk`,
+        (b: Record<string, unknown>) => Array.isArray(b['items']) && b['period'] === 1,
+      )
+      .reply(200, { data: { key_id: 7 } });
+    expect(await createOpenproviderClient().createPleskLicense('tok', valid)).toEqual({
+      key_id: 7,
+    });
+  });
+  it('updatePleskLicense PUTs /licenses/plesk/:key_id with body', async () => {
+    const body = {
+      key_id: 5,
+      items: ['SKU'],
+      period: 1,
+      ip_address_binding: '127.0.0.1',
+      title: 'T',
+    };
+    nock(BASE)
+      .put(`${PREFIX}/licenses/plesk/5`, (b: Record<string, unknown>) => b['key_id'] === 5)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().updatePleskLicense('tok', body)).toEqual({ ok: true });
+  });
+  it('resetPleskHwid POSTs /licenses/hwids/reset/:product/:key_id', async () => {
+    nock(BASE)
+      .post(
+        `${PREFIX}/licenses/hwids/reset/plesk/5`,
+        (b: Record<string, unknown>) => b['key_id'] === 5 && b['product'] === 'plesk',
+      )
+      .reply(200, { data: { ok: true } });
+    expect(
+      await createOpenproviderClient().resetPleskHwid('tok', { key_id: 5, product: 'plesk' }),
+    ).toEqual({ ok: true });
+  });
+  it('deletePleskLicense DELETEs /licenses/plesk/:key_id', async () => {
+    nock(BASE)
+      .delete(`${PREFIX}/licenses/plesk/7`)
+      .reply(200, { data: { ok: true } });
+    expect(await createOpenproviderClient().deletePleskLicense('tok', 7)).toEqual({ ok: true });
+  });
+});
