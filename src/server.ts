@@ -571,6 +571,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   await registerDashboard(app, {
     cookieSecret: cfg.dashboardCookieSecret,
+    cookieSecure: cfg.cookieSecure,
     signup: async (email, password) => {
       try {
         assertPasswordPolicy(password);

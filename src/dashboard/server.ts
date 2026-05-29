@@ -26,6 +26,7 @@ export type LoginOutcome =
 
 export interface DashboardDeps {
   cookieSecret: string;
+  cookieSecure: boolean;
   signup: (email: string, password: string) => Promise<SignupOutcome>;
   login: (email: string, password: string) => Promise<LoginOutcome>;
   /** Tasks 7–8 attach page routes via this hook. Pass a no-op for the scaffold alone. */
@@ -72,7 +73,11 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
       void reply.code(401);
       return reply.view('login', { error: 'Invalid email or password', notice: null });
     }
-    setSession(reply, { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email });
+    setSession(
+      reply,
+      { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email },
+      { secure: deps.cookieSecure },
+    );
     return reply.redirect('/dashboard');
   });
 
@@ -91,7 +96,11 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
       void reply.code(400);
       return reply.view('signup', { error: 'Password must be at least 12 characters.' });
     }
-    setSession(reply, { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email });
+    setSession(
+      reply,
+      { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email },
+      { secure: deps.cookieSecure },
+    );
     return reply.redirect('/dashboard');
   });
 

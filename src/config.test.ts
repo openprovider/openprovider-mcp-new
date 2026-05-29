@@ -10,6 +10,15 @@ const baseEnv = {
   DASHBOARD_COOKIE_SECRET: 'test-cookie-secret-min-length-ok',
 };
 
+const base = {
+  DATABASE_URL: 'postgres://x',
+  GCP_PROJECT_ID: 'p',
+  GCP_KMS_KEY_NAME: 'k',
+  GCS_BUCKET: 'b',
+  DEV_BEARER_TOKEN: 'd',
+  DASHBOARD_COOKIE_SECRET: 's',
+};
+
 describe('config', () => {
   it('throws if a required variable is missing', () => {
     expect(() => loadConfig({ NODE_ENV: 'test' })).toThrow(/DATABASE_URL/);
@@ -40,5 +49,26 @@ describe('config', () => {
         DASHBOARD_COOKIE_SECRET: 'test-cookie-secret-min-length-ok',
       }),
     ).toThrow(/GCP_KMS_KEY_NAME/);
+  });
+});
+
+describe('cookieSecure derivation', () => {
+  it('defaults to true in production', () => {
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).cookieSecure).toBe(true);
+  });
+  it('defaults to false in dev', () => {
+    expect(loadConfig({ ...base, NODE_ENV: 'development' }).cookieSecure).toBe(false);
+  });
+  it('explicit DASHBOARD_COOKIE_SECURE=true overrides dev', () => {
+    expect(
+      loadConfig({ ...base, NODE_ENV: 'development', DASHBOARD_COOKIE_SECURE: 'true' })
+        .cookieSecure,
+    ).toBe(true);
+  });
+  it('explicit DASHBOARD_COOKIE_SECURE=false overrides production', () => {
+    expect(
+      loadConfig({ ...base, NODE_ENV: 'production', DASHBOARD_COOKIE_SECURE: 'false' })
+        .cookieSecure,
+    ).toBe(false);
   });
 });

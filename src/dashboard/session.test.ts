@@ -270,6 +270,27 @@ describe('assertCsrf', () => {
 });
 
 // ---------------------------------------------------------------------------
+// setSession secure option
+// ---------------------------------------------------------------------------
+
+describe('setSession secure option', () => {
+  it('setSession emits secure:true when configured', () => {
+    const reply = makeFakeReply();
+    setSession(
+      reply as never,
+      { tenantId: 't', userId: 'u', subject: 's', role: 'owner' },
+      { secure: true },
+    );
+    expect(reply._cookies['op_dash']!.opts.secure).toBe(true);
+  });
+  it('setSession defaults secure:false when not configured', () => {
+    const reply = makeFakeReply();
+    setSession(reply as never, { tenantId: 't', userId: 'u', subject: 's', role: 'owner' });
+    expect(reply._cookies['op_dash']!.opts.secure).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // requireRole
 // ---------------------------------------------------------------------------
 

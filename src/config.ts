@@ -11,6 +11,7 @@ const schema = z.object({
   DEV_BEARER_TOKEN: z.string().min(1),
   PORT: z.coerce.number().default(3000),
   DASHBOARD_COOKIE_SECRET: z.string().min(1),
+  DASHBOARD_COOKIE_SECURE: z.string().optional(),
 });
 
 export function loadConfig(
@@ -28,6 +29,10 @@ export function loadConfig(
     devBearerToken: parsed.DEV_BEARER_TOKEN,
     port: parsed.PORT,
     dashboardCookieSecret: parsed.DASHBOARD_COOKIE_SECRET,
+    cookieSecure:
+      parsed.DASHBOARD_COOKIE_SECURE !== undefined
+        ? parsed.DASHBOARD_COOKIE_SECURE === 'true'
+        : parsed.NODE_ENV === 'production',
   };
 }
 

@@ -18,7 +18,11 @@ const COOKIE = 'op_dash';
  * Write a signed session cookie and return the CSRF token embedded in it.
  * The caller is responsible for passing `csrf` to the rendered template.
  */
-export function setSession(reply: FastifyReply, s: Omit<DashboardSession, 'csrf'>): string {
+export function setSession(
+  reply: FastifyReply,
+  s: Omit<DashboardSession, 'csrf'>,
+  opts: { secure?: boolean } = {},
+): string {
   const csrf = randomBytes(16).toString('hex');
   const value = JSON.stringify({ ...s, csrf });
   void reply.setCookie(COOKIE, value, {
@@ -26,7 +30,7 @@ export function setSession(reply: FastifyReply, s: Omit<DashboardSession, 'csrf'
     sameSite: 'lax',
     path: '/',
     signed: true,
-    secure: false,
+    secure: opts.secure ?? false,
   });
   return csrf;
 }
