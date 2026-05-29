@@ -1,6 +1,7 @@
 import type { OpenproviderClient } from '../../openprovider/client.js';
 import { createDomainCheckPricer, type Pricer } from './domain-check.js';
 import { createDomainOpPricer } from './domain-op.js';
+import { createSslOrderPricer } from './ssl-order.js';
 
 export { UnsupportedCurrencyError } from './currency.js';
 export type { Pricer } from './domain-check.js';
@@ -13,16 +14,22 @@ export interface Pricing {
 
 export function createPricing(deps: { client: OpenproviderClient }): Pricing {
   const domainCheck = createDomainCheckPricer(deps);
-  const renew = createDomainOpPricer({ client: deps.client, operation: 'renew' });
-  const transfer = createDomainOpPricer({ client: deps.client, operation: 'transfer' });
-  const restore = createDomainOpPricer({ client: deps.client, operation: 'restore' });
+  const renewDomain = createDomainOpPricer({ client: deps.client, operation: 'renew' });
+  const transferDomain = createDomainOpPricer({ client: deps.client, operation: 'transfer' });
+  const restoreDomain = createDomainOpPricer({ client: deps.client, operation: 'restore' });
+  const createSsl = createSslOrderPricer({ client: deps.client, mode: 'create' });
+  const renewSsl = createSslOrderPricer({ client: deps.client, mode: 'renew' });
+  const reissueSsl = createSslOrderPricer({ client: deps.client, mode: 'reissue' });
 
   const map = new Map<string, Pricer>([
     ['register_domain', domainCheck],
     ['update_domain', domainCheck],
-    ['renew_domain', renew],
-    ['transfer_domain', transfer],
-    ['restore_domain', restore],
+    ['renew_domain', renewDomain],
+    ['transfer_domain', transferDomain],
+    ['restore_domain', restoreDomain],
+    ['create_ssl_order', createSsl],
+    ['renew_ssl_order', renewSsl],
+    ['reissue_ssl_order', reissueSsl],
   ]);
 
   return {
