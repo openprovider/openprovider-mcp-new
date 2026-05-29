@@ -5,7 +5,7 @@ export type Principal =
       userId: string;
       subject: string;
       scopes: string[];
-      role: 'owner' | 'admin' | 'operator' | 'viewer';
+      role: 'owner' | 'admin' | 'operator' | 'viewer' | 'auditor';
     }
   | {
       kind: 'service';
