@@ -1,6 +1,7 @@
 import type { OpenproviderClient } from '../../openprovider/client.js';
 import { createDomainCheckPricer, type Pricer } from './domain-check.js';
 import { createDomainOpPricer } from './domain-op.js';
+import { createPleskLicensePricer } from './plesk-license.js';
 import { createSslOrderPricer } from './ssl-order.js';
 
 export { UnsupportedCurrencyError } from './currency.js';
@@ -20,6 +21,7 @@ export function createPricing(deps: { client: OpenproviderClient }): Pricing {
   const createSsl = createSslOrderPricer({ client: deps.client, mode: 'create' });
   const renewSsl = createSslOrderPricer({ client: deps.client, mode: 'renew' });
   const reissueSsl = createSslOrderPricer({ client: deps.client, mode: 'reissue' });
+  const pleskLicense = createPleskLicensePricer({ client: deps.client });
 
   const map = new Map<string, Pricer>([
     ['register_domain', domainCheck],
@@ -30,6 +32,7 @@ export function createPricing(deps: { client: OpenproviderClient }): Pricing {
     ['create_ssl_order', createSsl],
     ['renew_ssl_order', renewSsl],
     ['reissue_ssl_order', reissueSsl],
+    ['create_plesk_license', pleskLicense],
   ]);
 
   return {
