@@ -1,6 +1,6 @@
 {
   "name": "openprovider-mcp",
-  "version": "0.11.0-api-coverage",
+  "version": "0.12.0-phase8",
   "private": true,
   "description": "Enterprise multi-tenant MCP server for Openprovider",
   "type": "module",
