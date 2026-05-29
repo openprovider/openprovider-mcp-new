@@ -1,14 +1,38 @@
 # Changelog
 
-## [Unreleased]
+## [0.11.0-api-coverage] — 2026-05-29
 
 ### Breaking changes
 - **Pricing engine wired to spend-cap.** `renew_domain`, `transfer_domain`, `restore_domain`, `create_ssl_order`, `renew_ssl_order`, `reissue_ssl_order`, `create_plesk_license` now consume from the tenant's `spend_caps.limit_eur` (previously they were priced at 0 and bypassed the cap). Tenants whose cap was set under the prior behavior should raise it before performing these operations or confirmations will be denied with `decision: deny, reason: spend_cap_exceeded`. `trade_domain` remains confirm-without-spend (no public Openprovider price source is available for the trade operation).
 
-### Added
-- `src/policies/pricing/` directory with sub-pricers: `domain-check`, `domain-op`, `ssl-order`, `plesk-license`.
+### Added — full Openprovider API coverage (97 tools total, +85 since 0.10.0)
+
+**Batch 1 — Domain lifecycle (11 tools):** `suggest_domain`, `get_domain_authcode`, `reset_domain_authcode`, `approve_domain_transfer`, `send_foa1_domain_transfer`, `delete_domain`, `restart_domain_operation`, `renew_domain`, `transfer_domain`, `trade_domain`, `restore_domain`. Migration 0014 seeds the policy modes.
+
+**Batch 2 — DNS (21 tools):** zones (list/get/create/update/delete + list-records), nameservers (list/get/create/update/delete), nameserver groups (list/get/create/update/delete), DNS templates (list/get/create/delete), `create_domain_token`. Migration 0015. `create_dns_zone` uses a flat `records[]` array; `update_dns_zone` uses an `{add[], remove[]}` records object — enforced by schema.
+
+**Batch 3 — Catalog + Tags (6 tools):** `list_tlds`, `get_tld`, `get_domain_price` (Domain Price Service), `list_tags`, `create_tag`, `delete_tag`. Migration 0016. Tag delete is by key+value query params (not path id); tags are key/value pairs (not name/color/description).
+
+**Batch 4 — SSL (15 tools):** `list_ssl_products`, `get_ssl_product`, `list_ssl_orders`, `get_ssl_order`, `get_ssl_approver_emails`, `create_ssl_order`, `renew_ssl_order`, `reissue_ssl_order`, `cancel_ssl_order`, `update_ssl_order`, `update_ssl_approver_email`, `resend_ssl_approver_email`, `create_csr`, `decode_csr`, `create_ssl_otp_token`. Migration 0017.
+
+**Batch 5 — Customers (5 tools):** `list_customers`, `get_customer`, `create_customer`, `update_customer`, `delete_customer`. Migration 0018. Identifier is the customer handle (string), not a numeric ID. `get_deleted_customer` from the spec table was dropped — no distinct OP endpoint exists for it.
+
+**Batch 6 — Email & adjacents (18 tools):** Email templates (list/create/update/delete), email verification (list-domains/start/restart), EasyDmarc (get/list-subscriptions/create/retry/sso-login/delete), Spam Experts (get-domain/generate-login-url/create/update/delete). Migration 0019.
+
+**Batch 7 — License (9 tools):** `list_license_prices`, `list_license_items`, `list_plesk_licenses`, `get_plesk_license`, `get_plesk_key`, `create_plesk_license`, `update_plesk_license`, `reset_plesk_hwid`, `delete_plesk_license`. Migration 0020.
+
+**Policy modes:** reads covered by existing `list_*`/`get_*` wildcards (plus new `check_*`/`suggest_*` wildcards added in Batch 1); low-risk writes are `allow`; deletes and billable confirm-mode writes require owner/admin approval. Catalog count is asserted at **97** in `src/mcp/tool-catalog.test.ts`. Per-batch dispatch + policy integration tests under `tests/integration/mcp/`.
+
+### Added — pricing engine
+- `src/policies/pricing/` directory with sub-pricers: `domain-check`, `domain-op`, `ssl-order`, `plesk-license`. `domain-op` uses the Batch-3 `getDomainPrice` endpoint with `operation: renew|transfer|restore`. `ssl-order` uses cached `listSslProducts` + a `getSslOrder` lookup for the renew path. `plesk-license` uses cached `listLicensePrices` + per-SKU sum.
 - Env-gated live integration tests against the Openprovider sandbox: `live-domain-price`, `live-ssl-products`, `live-license-prices` (skipped unless `OPENPROVIDER_LIVE=1`).
 - Confirm-flow pricing integration test (`tests/integration/policies/pricing-confirm.test.ts`).
+
+### Changed
+- `isReadTool` (in `src/policies/engine.ts`) is now **prefix-based**: returns true for any tool name starting with `list_`, `get_`, `check_`, or `suggest_` (plus the explicit `READ_TOOLS` set for outliers like `list_pending_confirmations`). Replaces the hand-maintained set that didn't scale across 97 tools.
+- `ruleFor` (in `src/policies/schema.ts`) now does **true longest-prefix wildcard matching** when resolving a tool's policy mode (e.g. `get_secret_*` correctly beats `get_*` for `get_secret_value`). Previously returned the first matching wildcard in `Object.keys` order — harmless at the time, but a latent bug as overlapping wildcards became possible.
+- `OpenproviderClient` arg-typed write methods now call `XxxArgs.parse(args)` internally before sending, surfacing schema violations as zod errors instead of remote 4xx. `getDomainPrice` / `deleteTag` use `URLSearchParams` for dot-notation query construction.
+- `pricing.price()` is skipped when no Openprovider token is available (the tenant has no creds onboarded). Returns 0 cents → cap-gate skipped. The tenant can't execute a billable in that state anyway (the OP call would fail), so the cap is moot; the confirmation gate still applies.
 
 ## [0.10.0-phase6c] — 2026-05-27
 
