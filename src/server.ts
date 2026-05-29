@@ -537,6 +537,7 @@ async function main(): Promise<void> {
   const app = await createMcpServer({
     devToken: cfg.devBearerToken,
     devPrincipal,
+    trustProxy: cfg.trustProxy,
     apiKeyResolver,
     tools: buildToolCatalog(),
     dispatchFactory,
@@ -571,6 +572,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   await registerDashboard(app, {
     cookieSecret: cfg.dashboardCookieSecret,
+    cookieSecure: cfg.cookieSecure,
     signup: async (email, password) => {
       try {
         assertPasswordPolicy(password);

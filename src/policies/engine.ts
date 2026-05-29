@@ -38,7 +38,8 @@ export function resolveToolMode(
 ): 'allow' | 'confirm' | 'deny' {
   const mode = toolMode(policy, toolName);
   if (mode === 'deny') return 'deny';
-  if (role === 'viewer' && !(mode === 'allow' && isReadTool(toolName))) return 'deny';
+  if ((role === 'viewer' || role === 'auditor') && !(mode === 'allow' && isReadTool(toolName)))
+    return 'deny';
   return mode;
 }
 
@@ -47,7 +48,10 @@ export function evaluate(input: EvaluateInput): Decision {
   if (mode === 'deny') return { decision: 'deny', reason: 'tool_not_permitted' };
 
   // Role gate: viewer may only run allow-mode read tools.
-  if (input.role === 'viewer' && !(mode === 'allow' && isReadTool(input.toolName))) {
+  if (
+    (input.role === 'viewer' || input.role === 'auditor') &&
+    !(mode === 'allow' && isReadTool(input.toolName))
+  ) {
     return { decision: 'deny', reason: 'insufficient_role' };
   }
 

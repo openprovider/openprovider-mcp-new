@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyView from '@fastify/view';
@@ -26,6 +27,7 @@ export type LoginOutcome =
 
 export interface DashboardDeps {
   cookieSecret: string;
+  cookieSecure: boolean;
   signup: (email: string, password: string) => Promise<SignupOutcome>;
   login: (email: string, password: string) => Promise<LoginOutcome>;
   /** Tasks 7–8 attach page routes via this hook. Pass a no-op for the scaffold alone. */
@@ -60,21 +62,34 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
     prefix: '/dashboard/static/',
   });
 
+  await app.register(rateLimit, { global: false });
+
   // GET /dashboard/login — render the email+password login form
   app.get('/dashboard/login', (_req, reply) => reply.view('login', { error: null, notice: null }));
 
   // POST /dashboard/login — authenticate and set session
-  // TODO(phase8): per-IP login rate limit (needs @fastify/rate-limit registered app-wide before dashboard mount)
-  app.post('/dashboard/login', async (req, reply) => {
-    const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
-    const r = await deps.login((email ?? '').trim().toLowerCase(), password ?? '');
-    if (!r.ok) {
-      void reply.code(401);
-      return reply.view('login', { error: 'Invalid email or password', notice: null });
-    }
-    setSession(reply, { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email });
-    return reply.redirect('/dashboard');
-  });
+  app.post(
+    '/dashboard/login',
+    {
+      config: {
+        rateLimit: { max: 5, timeWindow: '1 minute', keyGenerator: (req) => req.ip },
+      },
+    },
+    async (req, reply) => {
+      const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+      const r = await deps.login((email ?? '').trim().toLowerCase(), password ?? '');
+      if (!r.ok) {
+        void reply.code(401);
+        return reply.view('login', { error: 'Invalid email or password', notice: null });
+      }
+      setSession(
+        reply,
+        { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email },
+        { secure: deps.cookieSecure },
+      );
+      return reply.redirect('/dashboard');
+    },
+  );
 
   // GET /dashboard/signup — render the signup form
   app.get('/dashboard/signup', (_req, reply) => reply.view('signup', { error: null }));
@@ -91,7 +106,11 @@ export async function registerDashboard(app: FastifyInstance, deps: DashboardDep
       void reply.code(400);
       return reply.view('signup', { error: 'Password must be at least 12 characters.' });
     }
-    setSession(reply, { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email });
+    setSession(
+      reply,
+      { tenantId: r.tenantId, userId: r.userId, subject: r.email, role: r.role, email: r.email },
+      { secure: deps.cookieSecure },
+    );
     return reply.redirect('/dashboard');
   });
 

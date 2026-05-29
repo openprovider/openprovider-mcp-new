@@ -158,3 +158,41 @@ describe('resolveToolMode', () => {
     expect(isReadTool('delete_domain')).toBe(false);
   });
 });
+
+describe('auditor role (read-only)', () => {
+  const policy: PolicyDoc = {
+    ...DEFAULT_POLICY,
+    spend_caps: { window: 'month', limit_eur: 100 },
+  };
+
+  it('auditor is allowed read tools', () => {
+    expect(resolveToolMode(policy, 'list_domains', 'auditor')).toBe('allow');
+    expect(resolveToolMode(policy, 'get_domain', 'auditor')).toBe('allow');
+    expect(resolveToolMode(policy, 'check_domain', 'auditor')).toBe('allow');
+  });
+
+  it('auditor is denied every write/confirm tool', () => {
+    for (const t of [
+      'register_domain',
+      'create_dns_zone',
+      'delete_domain',
+      'create_ssl_order',
+      'create_contact',
+    ]) {
+      expect(resolveToolMode(policy, t, 'auditor')).toBe('deny');
+    }
+  });
+
+  it('evaluate denies auditor a write tool with insufficient_role', () => {
+    const d = evaluate({
+      toolName: 'register_domain',
+      args: {},
+      role: 'auditor',
+      policy,
+      liveSpendCents: 0,
+      estimatedCostCents: 0,
+      tldsInArgs: [],
+    });
+    expect(d).toMatchObject({ decision: 'deny', reason: 'insufficient_role' });
+  });
+});

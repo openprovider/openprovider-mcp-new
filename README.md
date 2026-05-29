@@ -288,6 +288,21 @@ npm run lint
 npm run typecheck
 ```
 
+### Soak testing (manual)
+
+`scripts/soak.mjs` drives the running MCP server's `tools/list` (a benign,
+read-only authenticated call) under sustained load and reports p50/p99 latency
+and driver RSS delta. It is NOT part of CI — load tests are environment-sensitive.
+
+1. Start the server (`npm run dev`) and obtain a bearer token (a dashboard-issued
+   `op_live_…` API key, or `DEV_BEARER_TOKEN`).
+2. Run:
+   ```
+   npm run soak -- --token <bearer> --duration 60 --connections 20
+   ```
+
+Because it only calls `tools/list`, it never mutates Openprovider state.
+
 ## License
 
 MIT — see `LICENSE`.

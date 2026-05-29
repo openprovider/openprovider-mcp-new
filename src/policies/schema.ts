@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const RoleEnum = z.enum(['owner', 'admin', 'operator', 'viewer']);
+export const RoleEnum = z.enum(['owner', 'admin', 'operator', 'viewer', 'auditor']);
 export type Role = z.infer<typeof RoleEnum>;
 
 export const ModeEnum = z.enum(['allow', 'confirm']);

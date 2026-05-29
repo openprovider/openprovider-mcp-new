@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.0-phase8] — 2026-05-29
+
+### Security
+- **Login rate limit.** `POST /dashboard/login` on the dashboard is capped at 5 attempts per minute per IP (`@fastify/rate-limit`, registered non-global and scoped to the login route). Per-IP keying requires `TRUST_PROXY=true` when running behind a reverse proxy (defaults to false; do not enable without a trusted proxy).
+- **Session cookie `Secure` flag is env-gated.** New `DASHBOARD_COOKIE_SECURE` config var; when unset it defaults to `true` in production (`NODE_ENV=production`) and `false` otherwise, so local HTTP dev still works while prod cookies are always `Secure`.
+- **Openprovider auth errors are legible.** A login failure carrying Openprovider error `code: 196` now surfaces as `OpenproviderAuthError('invalid Openprovider credentials')` instead of a generic `login failed: 500`.
+
+### Added
+- **`auditor` read-only role.** A fifth role alongside owner/admin/operator/viewer, gated identically to `viewer` in the policy engine (reads allowed, all writes/confirms denied). Added to the `Role` type, `ROLES` set, principal union, and `RoleEnum`. Migration 0021 extends the `users_role_check` and `invitations_role_check` CHECK constraints to admit `'auditor'`.
+- **Property-based fuzz suites** (`fast-check`, 200 runs each) for the policy engine, contact/credential redaction, the pricing engine, and the policy repo — 13 invariants total.
+- **Soak-test script** (`npm run soak`, `scripts/soak.mjs`, `autocannon`) that load-tests `/mcp tools/list`; documented in the README. Manual, not wired into CI.
+- **Signed release images.** CI pushes the container image to GHCR and applies a keyless `cosign` signature plus a CycloneDX SBOM attestation, then verifies both — gated to `main` and tags.
+
+### Changed
+- **Audit-chain hashing is concurrency-safe.** Migration 0022 adds an `audit_events.chain_seq` column assigned under the existing per-tenant advisory lock and chains/verifies by it, replacing the prior `ORDER BY id` chaining that could diverge from lock order under concurrent inserts (bigserial ids are assigned before the BEFORE-INSERT trigger takes the lock). The canonicalization string is byte-identical to migration 0010.
+
 ## [0.11.0-api-coverage] — 2026-05-29
 
 ### Breaking changes
